@@ -28,51 +28,35 @@
           consoleOutput.style.display = 'block';
           var div = document.createElement('div');
           div.style.color = '#ff5555';
-          div.style.borderBottom = '1px solid #444';
           div.style.padding = '4px 0';
-          div.innerHTML = '<b>[ERROR]</b> ' + msg + '<br><small>Line: ' + line + '</small>';
+          div.innerHTML = '<b>[BOOT ERROR]</b> ' + msg + ' (Line: ' + line + ')';
           consoleOutput.appendChild(div);
         }
         return false;
       };
-      
-      console.log = (function(oldLog) {
-        return function(msg) {
-          oldLog.apply(console, arguments);
-          var consoleOutput = document.getElementById('debug-console');
-          if (consoleOutput) {
-            var div = document.createElement('div');
-            div.style.color = '#00ff00';
-            div.innerText = '[LOG] ' + msg;
-            consoleOutput.appendChild(div);
-          }
-        };
-      })(console.log);
     </script>
     <style>
-      html, body { 
-        margin: 0; padding: 0; width: 100%; height: 100%; 
-        overflow: hidden; background-color: #0f172a; 
-      }
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0f172a; }
       #root { width: 100%; height: 100%; display: flex; flex-direction: column; }
       #debug-console {
         position: fixed; top: 0; left: 0; right: 0; height: 100px;
-        background: rgba(0,0,0,0.9); color: #00ff00; font-family: monospace;
-        font-size: 10px; padding: 8px; z-index: 10001; overflow-y: auto;
-        border-bottom: 1px solid #334155; display: none;
+        background: rgba(0,0,0,0.95); color: #00ff00; font-family: monospace;
+        font-size: 11px; padding: 10px; z-index: 10001; overflow-y: auto;
+        border-bottom: 2px solid #ef4444; display: none; pointer-events: none;
       }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-slate-900 text-white">
-    <div id="debug-console"><b>System Debug Console</b><br></div>
+    <div id="debug-console"></div>
     <div id="root">
+      <!-- This is the "PROGOLF" splash screen that disappears once React loads -->
       <div style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a;">
         <p style="font-size: 1.5rem; font-weight: 900; color: #f8fafc; margin-bottom: 1rem; letter-spacing: 2px;">PROGOLF</p>
         <div style="width: 30px; height: 30px; border: 4px solid #1e293b; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1rem;"></div>
-        <p style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2em;">Loading precision maps...</p>
+        <p style="font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2em;">Initializing precision GPS...</p>
       </div>
     </div>
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
