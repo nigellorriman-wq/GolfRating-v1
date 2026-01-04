@@ -13,7 +13,7 @@ import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } fr
 import L from 'leaflet';
 import { Ruler, Map as MapIcon, RotateCcw, Activity, Trees, Info, ShieldAlert, AlertTriangle } from 'lucide-react';
 
-// Fix for default marker icons in Leaflet when using ESM
+// Fix for default marker icons in Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -97,18 +97,23 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
 
   useEffect(() => {
+    let sensor: any = null;
     if ('PressureSensor' in window) {
       try {
-        const sensor = new (window as any).PressureSensor({ frequency: 2 });
+        sensor = new (window as any).PressureSensor({ frequency: 2 });
         sensor.addEventListener('reading', () => {
           setTracking(prev => ({ ...prev, altSource: 'Barometer' }));
           setElevAccuracy(0.5); 
         });
+        sensor.addEventListener('error', (event: any) => {
+          console.warn('PressureSensor error:', event.error.name, event.error.message);
+        });
         sensor.start();
       } catch (e) {
-        console.warn('Barometer not available or access denied', e);
+        console.warn('Barometer instantiation failed', e);
       }
     }
+    return () => { if (sensor) sensor.stop(); };
   }, []);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
@@ -147,7 +152,6 @@ const App: React.FC = () => {
            return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         }
         const dist = calculateDistance(lastPoint, newPoint);
-        // Requirement: Insert point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -164,31 +168,17 @@ const App: React.FC = () => {
     }
 
     const handleError = (error: GeolocationPositionError) => {
-      let msg = "GPS Error";
-      switch(error.code) {
-        case error.PERMISSION_DENIED:
-          msg = "Permission Denied: Please enable Location services.";
-          break;
-        case error.POSITION_UNAVAILABLE:
-          msg = "Signal Lost: Check your surroundings.";
-          break;
-        case error.TIMEOUT:
-          msg = "Request Timed Out: Retrying...";
-          break;
-        default:
-          msg = error.message || "Unknown Location Error";
-      }
+      let msg = "GPS Signal Error";
+      if (error.code === error.PERMISSION_DENIED) msg = "Location Access Denied";
+      else if (error.code === error.POSITION_UNAVAILABLE) msg = "Position Unavailable";
+      else if (error.code === error.TIMEOUT) msg = "GPS Timeout";
       setGpsError(msg);
     };
 
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       handleError,
-      { 
-        enableHighAccuracy: true, 
-        maximumAge: 0, 
-        timeout: 10000 
-      }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
     );
 
     return () => {
@@ -254,8 +244,8 @@ const App: React.FC = () => {
   }, [mapping.points, mapping.isClosed]);
 
   const accuracyDescription = currentPos 
-    ? (currentPos.accuracy < 2 ? "Better than 2m" : currentPos.accuracy <= 5 ? "2m-5m" : ">5m") 
-    : (gpsError || "Locating...");
+    ? (currentPos.accuracy < 2 ? "High Accuracy (<2m)" : currentPos.accuracy <= 5 ? "Fair Accuracy (2-5m)" : "Low Accuracy (>5m)") 
+    : (gpsError || "Searching for GPS...");
 
   return (
     <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden">

@@ -22,80 +22,51 @@
 }
 </script>
     <script>
-      // Global error handler to help catch "blank screen" causes on mobile
+      // Enhanced error catching for Android troubleshooting
       window.onerror = function(msg, url, line, col, error) {
-        var extra = !col ? '' : '\ncolumn: ' + col;
-        extra += !error ? '' : '\nerror: ' + error;
-        console.error("Error: " + msg + "\nurl: " + url + "\nline: " + line + extra);
-        var debugDiv = document.getElementById('debug-error');
-        if (debugDiv) {
-          debugDiv.style.display = 'block';
-          debugDiv.innerText = "Runtime Error: " + msg + " at " + line + ":" + col;
+        var consoleOutput = document.getElementById('debug-console');
+        if (consoleOutput) {
+          consoleOutput.style.display = 'block';
+          consoleOutput.innerHTML += '<div style="color:#ff5555;margin-bottom:5px;">[' + new Date().toLocaleTimeString() + '] ERROR: ' + msg + ' (Line: ' + line + ')</div>';
         }
         return false;
       };
+      
+      // Check for importmap support
+      window.addEventListener('load', function() {
+        if (!HTMLScriptElement.supports || !HTMLScriptElement.supports('importmap')) {
+          var debug = document.getElementById('debug-console');
+          debug.style.display = 'block';
+          debug.innerHTML += '<div style="color:#ffcc00;">WARNING: Your browser does not support importmaps. Please update Chrome or System WebView.</div>';
+        }
+      });
     </script>
     <style>
-      :root {
-        --app-height: 100%;
-      }
       html, body { 
-        margin: 0; 
-        padding: 0; 
-        width: 100%;
-        height: 100%;
-        height: -webkit-fill-available;
-        overflow: hidden;
-        background-color: #0f172a;
+        margin: 0; padding: 0; width: 100%; height: 100%; 
+        overflow: hidden; background-color: #0f172a; 
       }
-      #root { 
-        height: 100vh; 
-        height: -webkit-fill-available;
-        width: 100vw; 
-        display: flex; 
-        flex-direction: column; 
-      }
-      .leaflet-container { 
-        background: #0f172a; 
-        height: 100%; 
-        width: 100%;
-      }
-      * {
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-        -webkit-tap-highlight-color: transparent;
-      }
-      #debug-error {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(255,0,0,0.9);
-        color: white;
-        font-family: monospace;
-        font-size: 10px;
-        padding: 10px;
-        z-index: 9999;
-        display: none;
-        word-break: break-all;
+      #root { width: 100%; height: 100%; display: flex; flex-direction: column; }
+      #debug-console {
+        position: fixed; top: 0; left: 0; right: 0; height: 150px;
+        background: rgba(0,0,0,0.85); color: #00ff00; font-family: monospace;
+        font-size: 11px; padding: 10px; z-index: 10000; overflow-y: auto;
+        display: none; border-bottom: 2px solid #334155; pointer-events: none;
       }
     </style>
 </head>
 <body class="bg-slate-900 text-white">
+    <div id="debug-console"><b>System Debug Console</b><br></div>
     <div id="root">
-      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: #475569; background: #0f172a;">
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a;">
         <div style="text-align: center;">
           <p style="font-size: 1.25rem; font-weight: 800; color: #cbd5e1; margin-bottom: 0.5rem;">PROGOLF</p>
-          <div style="width: 20px; height: 20px; border: 2px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
-          <p style="font-size: 0.875rem;">Initializing...</p>
+          <div style="width: 24px; height: 24px; border: 3px solid #1e293b; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px;"></div>
+          <p style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em;">Loading Application...</p>
         </div>
       </div>
     </div>
-    <div id="debug-error"></div>
-    <style>
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
