@@ -11,7 +11,7 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Activity, Trees, Info, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw } from 'lucide-react';
 
 // Standard Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -40,7 +40,6 @@ const MapRefresher: React.FC<{
   isTracking: boolean 
 }> = ({ points, currentPos, mode, isTracking }) => {
   const map = useMap();
-  // Zoom level 21.2 approximates ~25m across a standard mobile screen
   const TRACK_ZOOM = 21.2;
 
   useEffect(() => {
@@ -92,7 +91,6 @@ const App: React.FC = () => {
 
   const watchId = useRef<number | null>(null);
 
-  // Initialize Barometer
   useEffect(() => {
     let sensor: any = null;
     if ('PressureSensor' in window) {
@@ -102,11 +100,8 @@ const App: React.FC = () => {
           setTracking(prev => ({ ...prev, altSource: 'Barometer' }));
           setElevAccuracy(0.5); 
         });
-        sensor.addEventListener('error', () => console.warn('PressureSensor error'));
         sensor.start();
-      } catch (e) {
-        console.warn('Barometer failed');
-      }
+      } catch (e) {}
     }
     return () => { if (sensor) sensor.stop(); };
   }, []);
@@ -144,9 +139,8 @@ const App: React.FC = () => {
       setMapping(prev => {
         const lastPoint = prev.points[prev.points.length - 1];
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
-        
         const dist = calculateDistance(lastPoint, newPoint);
-        if (dist >= 0.5) { // Mandatory 0.5m insertion
+        if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
         }
@@ -155,22 +149,23 @@ const App: React.FC = () => {
     }
   }, [tracking.isActive, tracking.altSource, mapping.isActive, mapping.isClosed]);
 
-  useEffect(() => {
+  const startGps = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsError("GPS Not Supported");
       return;
     }
-
+    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       (err) => setGpsError(err.message),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
     );
-
-    return () => {
-      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
-    };
   }, [handlePositionUpdate]);
+
+  useEffect(() => {
+    startGps();
+    return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); };
+  }, [startGps]);
 
   const startNewTracking = () => {
     if (!currentPos) return;
@@ -239,7 +234,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col">
-        <MapContainer center={[0,0]} zoom={21.2} className="w-full h-full absolute inset-0" zoomControl={false} attributionControl={false}>
+        <MapContainer center={[0,0]} zoom={3} className="w-full h-full absolute inset-0" zoomControl={false} attributionControl={false}>
           {mapProvider === 'OSM' ? (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
           ) : (
@@ -270,6 +265,13 @@ const App: React.FC = () => {
           )}
         </MapContainer>
 
+        {gpsError && (
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-[2000] flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-red-400 font-bold mb-4">GPS Error: {gpsError}</p>
+            <button onClick={startGps} className="px-6 py-3 bg-blue-600 rounded-xl font-bold">Retry GPS Connection</button>
+          </div>
+        )}
+
         {/* HUD Data Overlays */}
         <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
           {mode === 'Trk' ? (
@@ -293,28 +295,32 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Sensor info & Buttons */}
+        {/* Sensor info Overlay */}
         <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px]">
           <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black">{tracking.altSource}</span></div>
           <div className="flex items-center justify-between gap-4"><span>Elev Acc:</span><span className="font-black">{elevAccuracy ? `${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
           <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${currentPos?.accuracy < 2 ? 'bg-emerald-500' : currentPos?.accuracy <= 5 ? 'bg-yellow-500' : 'bg-red-500'}`} />
+            <div className={`w-2 h-2 rounded-full ${currentPos && currentPos.accuracy < 2 ? 'bg-emerald-500' : (currentPos && currentPos.accuracy <= 5) ? 'bg-yellow-500' : 'bg-red-500'}`} />
             <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'Searching...'}</span>
           </div>
         </div>
 
         <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
           {mode === 'Trk' ? (
-            <button onClick={startNewTracking} className="px-10 py-4 bg-red-600 active:bg-red-700 text-white rounded-2xl font-black shadow-xl flex items-center gap-2"><RotateCcw size={18} /> START NEW</button>
+            <button onClick={startNewTracking} disabled={!currentPos} className={`px-10 py-4 text-white rounded-2xl font-black shadow-xl flex items-center gap-2 transition-all ${currentPos ? 'bg-red-600 active:scale-95' : 'bg-slate-700 opacity-50'}`}>
+              <RotateCcw size={18} /> START NEW
+            </button>
           ) : (
             <div className="flex gap-2 w-full max-w-sm">
-              <button onClick={startNewGreen} className="flex-1 py-4 bg-emerald-600 rounded-2xl font-black text-xs uppercase shadow-lg">New Green</button>
+              <button onClick={startNewGreen} disabled={!currentPos} className="flex-1 py-4 bg-emerald-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg disabled:opacity-50">New Green</button>
               <button 
-                onTouchStart={() => toggleBunker(true)} onTouchEnd={() => toggleBunker(false)} 
-                onMouseDown={() => toggleBunker(true)} onMouseUp={() => toggleBunker(false)}
-                className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg ${mapping.isBunkerActive ? 'bg-amber-400 text-black' : 'bg-slate-700'}`}
+                onTouchStart={(e) => { e.preventDefault(); toggleBunker(true); }} 
+                onTouchEnd={(e) => { e.preventDefault(); toggleBunker(false); }} 
+                onMouseDown={() => toggleBunker(true)} 
+                onMouseUp={() => toggleBunker(false)}
+                className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-colors ${mapping.isBunkerActive ? 'bg-amber-400 text-black' : 'bg-slate-700'}`}
               >Bunker</button>
-              <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 rounded-2xl font-black text-xs uppercase shadow-lg">Close</button>
+              <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg">Close</button>
             </div>
           )}
         </div>
