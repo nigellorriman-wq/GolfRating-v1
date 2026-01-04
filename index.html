@@ -21,6 +21,20 @@
   }
 }
 </script>
+    <script>
+      // Global error handler to help catch "blank screen" causes on mobile
+      window.onerror = function(msg, url, line, col, error) {
+        var extra = !col ? '' : '\ncolumn: ' + col;
+        extra += !error ? '' : '\nerror: ' + error;
+        console.error("Error: " + msg + "\nurl: " + url + "\nline: " + line + extra);
+        var debugDiv = document.getElementById('debug-error');
+        if (debugDiv) {
+          debugDiv.style.display = 'block';
+          debugDiv.innerText = "Runtime Error: " + msg + " at " + line + ":" + col;
+        }
+        return false;
+      };
+    </script>
     <style>
       :root {
         --app-height: 100%;
@@ -46,15 +60,25 @@
         height: 100%; 
         width: 100%;
       }
-      /* Prevent UI interactions that interfere with mapping */
       * {
         -webkit-touch-callout: none;
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
-      input, textarea {
-        user-select: text;
+      #debug-error {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(255,0,0,0.9);
+        color: white;
+        font-family: monospace;
+        font-size: 10px;
+        padding: 10px;
+        z-index: 9999;
+        display: none;
+        word-break: break-all;
       }
     </style>
 </head>
@@ -63,10 +87,15 @@
       <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: #475569; background: #0f172a;">
         <div style="text-align: center;">
           <p style="font-size: 1.25rem; font-weight: 800; color: #cbd5e1; margin-bottom: 0.5rem;">PROGOLF</p>
-          <p style="font-size: 0.875rem;">Initializing system...</p>
+          <div style="width: 20px; height: 20px; border: 2px solid #334155; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+          <p style="font-size: 0.875rem;">Initializing...</p>
         </div>
       </div>
     </div>
+    <div id="debug-error"></div>
+    <style>
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>
