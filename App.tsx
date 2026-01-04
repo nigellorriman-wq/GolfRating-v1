@@ -97,7 +97,6 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
 
   useEffect(() => {
-    // Attempting to use the Barometer if available
     if ('PressureSensor' in window) {
       try {
         const sensor = new (window as any).PressureSensor({ frequency: 2 });
@@ -148,7 +147,6 @@ const App: React.FC = () => {
            return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         }
         const dist = calculateDistance(lastPoint, newPoint);
-        // Requirement: Generate point when device moves 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -160,21 +158,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setGpsError("Geolocation is not supported by this browser.");
+      setGpsError("GPS Not Supported");
       return;
     }
 
     const handleError = (error: GeolocationPositionError) => {
-      let errorMessage = "An unknown error occurred.";
+      let errorMessage = "GPS Error";
       switch (error.code) {
         case error.PERMISSION_DENIED:
-          errorMessage = "Location access denied. Please enable GPS.";
+          errorMessage = "GPS Permission Denied";
           break;
         case error.POSITION_UNAVAILABLE:
-          errorMessage = "Location unavailable. Check your signal.";
+          errorMessage = "GPS Signal Lost";
           break;
         case error.TIMEOUT:
-          errorMessage = "Location request timed out.";
+          errorMessage = "GPS Request Timeout";
           break;
       }
       setGpsError(errorMessage);
@@ -186,7 +184,7 @@ const App: React.FC = () => {
       { 
         enableHighAccuracy: true, 
         maximumAge: 0, 
-        timeout: 10000 
+        timeout: 15000 
       }
     );
 
@@ -265,11 +263,11 @@ const App: React.FC = () => {
 
   const accuracyDescription = currentPos 
     ? (currentPos.accuracy < 2 ? "Better than 2m" : currentPos.accuracy <= 5 ? "2m-5m" : ">5m") 
-    : "Waiting for signal...";
+    : (gpsError || "Locating...");
 
   return (
-    <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white">
-      <header className="p-3 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800/95 backdrop-blur-md z-[1000]">
+    <div className="flex flex-col h-screen w-screen select-none bg-slate-900 font-sans text-white overflow-hidden">
+      <header className="p-3 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800/95 backdrop-blur-md z-[1000] shrink-0">
         <div className="flex items-center gap-1">
           <button 
             onClick={() => setMode('Trk')}
@@ -291,14 +289,14 @@ const App: React.FC = () => {
         <div className="flex items-center gap-1">
           <button 
             onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')}
-            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 transition-colors border border-slate-600"
+            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"
           >
             <MapIcon size={12} />
             <span className="text-[10px] uppercase font-black">{mapProvider}</span>
           </button>
           <button 
             onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')}
-            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 transition-colors border border-slate-600"
+            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"
           >
             <Ruler size={12} />
             <span className="text-[10px] uppercase font-black">{units}</span>
@@ -306,18 +304,11 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 relative flex flex-col">
-        {gpsError && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-red-600/95 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 z-[2000] shadow-xl text-xs font-bold animate-pulse">
-            <AlertTriangle size={14} />
-            {gpsError}
-          </div>
-        )}
-
+      <main className="flex-1 relative overflow-hidden flex flex-col min-h-0">
         <MapContainer 
           center={currentPos ? [currentPos.lat, currentPos.lng] : [0,0]} 
-          zoom={21} 
-          className="flex-1 w-full"
+          zoom={currentPos ? 21 : 2} 
+          className="w-full h-full absolute inset-0"
           zoomControl={false}
           attributionControl={false}
         >
@@ -389,9 +380,16 @@ const App: React.FC = () => {
           )}
         </MapContainer>
 
+        {gpsError && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-600/95 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 z-[2000] shadow-xl text-[10px] font-black uppercase tracking-wider border border-white/20">
+            <AlertTriangle size={14} />
+            {gpsError}
+          </div>
+        )}
+
         <div className="absolute top-4 left-4 right-4 pointer-events-none flex flex-col gap-3 z-[1001]">
           {mode === 'Trk' && (
-            <div className="bg-slate-900/95 backdrop-blur-lg p-3 rounded-2xl border border-slate-700/50 shadow-2xl flex justify-between items-center">
+            <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between items-center">
               <div className="text-center flex-1 border-r border-slate-800">
                 <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-0.5">Distance</p>
                 <p className="text-2xl font-black text-blue-400 tabular-nums">
@@ -408,23 +406,23 @@ const App: React.FC = () => {
           )}
 
           {mode === 'Grn' && mapMetrics && (
-             <div className="bg-slate-900/95 backdrop-blur-lg p-3 rounded-2xl border border-slate-700/50 shadow-2xl grid grid-cols-2 gap-2">
-               <div className="bg-slate-800/40 p-2 rounded-xl border border-white/5">
+             <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
+               <div className="bg-slate-800/60 p-2 rounded-xl border border-white/5">
                  <p className="text-[8px] text-slate-500 font-black uppercase">Perimeter</p>
                  <p className="text-base font-black text-emerald-400 tabular-nums truncate">{toDisplayDistance(mapMetrics.totalLen, units)} {units === 'Yards' ? 'yd' : 'm'}</p>
                </div>
-               <div className="bg-slate-800/40 p-2 rounded-xl border border-white/5">
+               <div className="bg-slate-800/60 p-2 rounded-xl border border-white/5">
                  <p className="text-[8px] text-slate-500 font-black uppercase">Bunker</p>
                  <p className="text-base font-black text-amber-400 tabular-nums truncate">{toDisplayDistance(mapMetrics.bunkerLen, units)} {units === 'Yards' ? 'yd' : 'm'}</p>
                </div>
-               <div className="bg-slate-800/40 p-2 rounded-xl border border-white/5">
+               <div className="bg-slate-800/60 p-2 rounded-xl border border-white/5">
                  <p className="text-[8px] text-slate-500 font-black uppercase">Area</p>
                  <p className="text-base font-black text-blue-400 tabular-nums">
                    {units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} 
                    <span className="text-[9px] ml-0.5 opacity-60 uppercase">{units === 'Yards' ? 'sqyd' : 'm²'}</span>
                  </p>
                </div>
-               <div className="bg-slate-800/40 p-2 rounded-xl border border-white/5">
+               <div className="bg-slate-800/60 p-2 rounded-xl border border-white/5">
                  <p className="text-[8px] text-slate-500 font-black uppercase">Ratio</p>
                  <p className="text-base font-black text-red-400 tabular-nums">{mapMetrics.bunkerPct}%</p>
                </div>
@@ -432,7 +430,7 @@ const App: React.FC = () => {
           )}
         </div>
 
-        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700/50 backdrop-blur-lg text-[9px] flex flex-col gap-1.5 z-[1001] shadow-2xl min-w-[120px]">
+        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 backdrop-blur-lg text-[9px] flex flex-col gap-1.5 z-[1001] shadow-2xl min-w-[120px]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
               <Activity size={10} className="text-blue-400" />
@@ -455,12 +453,12 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
+        <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001] pointer-events-auto">
           {mode === 'Trk' ? (
             <button 
               onClick={startNewTracking}
               disabled={!currentPos}
-              className={`flex items-center gap-3 px-10 py-4 ${currentPos ? 'bg-red-600 active:bg-red-700 border-red-800' : 'bg-slate-700 cursor-not-allowed border-slate-800'} text-white rounded-2xl font-black text-lg shadow-[0_8px_25px_rgba(220,38,38,0.4)] transition-all active:translate-y-1 border-b-4`}
+              className={`flex items-center gap-3 px-10 py-4 ${currentPos ? 'bg-red-600 active:bg-red-700 border-red-800' : 'bg-slate-700 cursor-not-allowed border-slate-800'} text-white rounded-2xl font-black text-lg shadow-xl active:translate-y-1 transition-all border-b-4`}
             >
               <RotateCcw size={20} />
               START NEW
@@ -470,7 +468,7 @@ const App: React.FC = () => {
               <button 
                 onClick={startNewGreen}
                 disabled={!currentPos}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${currentPos ? 'bg-emerald-600 border-emerald-800' : 'bg-slate-700 border-slate-800 cursor-not-allowed'} text-white rounded-2xl font-black shadow-lg active:translate-y-1 transition-all border-b-4`}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${currentPos ? 'bg-emerald-600 border-emerald-800 shadow-emerald-900/20' : 'bg-slate-700 border-slate-800 cursor-not-allowed'} text-white rounded-2xl font-black shadow-lg active:translate-y-1 transition-all border-b-4`}
               >
                 <Trees size={18} />
                 <span className="text-[9px] uppercase tracking-tighter">New Green</span>

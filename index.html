@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ProGolf Track & Map</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -22,14 +22,42 @@
 }
 </script>
     <style>
-      body { margin: 0; padding: 0; background-color: #0f172a; }
-      #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
-      .leaflet-container { background: #0f172a; height: 100%; width: 100%; flex: 1; }
+      :root {
+        --app-height: 100%;
+      }
+      html, body { 
+        margin: 0; 
+        padding: 0; 
+        width: 100%;
+        height: 100%;
+        height: -webkit-fill-available;
+        overflow: hidden;
+        background-color: #0f172a;
+      }
+      #root { 
+        height: 100vh; 
+        height: -webkit-fill-available;
+        width: 100vw; 
+        display: flex; 
+        flex-direction: column; 
+      }
+      .leaflet-container { 
+        background: #0f172a; 
+        height: 100%; 
+        width: 100%;
+      }
+      /* Prevent text selection and long-press menus on mobile */
+      * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
     </style>
 </head>
-<body class="bg-slate-900 text-white overflow-hidden">
+<body class="bg-slate-900 text-white">
     <div id="root">
-      <div style="display: flex; height: 100vh; width: 100vw; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b;">
+      <div style="display: flex; height: 100vh; width: 100vw; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b; background: #0f172a;">
         <p>Initializing ProGolf...</p>
       </div>
     </div>
