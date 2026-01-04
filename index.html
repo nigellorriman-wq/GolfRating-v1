@@ -22,13 +22,17 @@
 }
 </script>
     <style>
-      body { margin: 0; padding: 0; }
-      #root { height: 100vh; width: 100vw; }
-      .leaflet-container { background: #0f172a; height: 100%; width: 100%; }
+      body { margin: 0; padding: 0; background-color: #0f172a; }
+      #root { height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+      .leaflet-container { background: #0f172a; height: 100%; width: 100%; flex: 1; }
     </style>
 </head>
 <body class="bg-slate-900 text-white overflow-hidden">
-    <div id="root"></div>
+    <div id="root">
+      <div style="display: flex; height: 100vh; width: 100vw; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b;">
+        <p>Initializing ProGolf...</p>
+      </div>
+    </div>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>

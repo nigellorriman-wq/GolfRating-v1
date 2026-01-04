@@ -97,6 +97,7 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
 
   useEffect(() => {
+    // Attempting to use the Barometer if available
     if ('PressureSensor' in window) {
       try {
         const sensor = new (window as any).PressureSensor({ frequency: 2 });
@@ -122,6 +123,7 @@ const App: React.FC = () => {
 
     setGpsError(null);
     setCurrentPos(newPoint);
+    
     if (tracking.altSource !== 'Barometer') {
       setElevAccuracy(pos.coords.altitudeAccuracy || null);
     }
@@ -146,6 +148,7 @@ const App: React.FC = () => {
            return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         }
         const dist = calculateDistance(lastPoint, newPoint);
+        // Requirement: Generate point when device moves 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -157,43 +160,53 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setGpsError("Geolocation not supported");
+      setGpsError("Geolocation is not supported by this browser.");
       return;
     }
 
+    const handleError = (error: GeolocationPositionError) => {
+      let errorMessage = "An unknown error occurred.";
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          errorMessage = "Location access denied. Please enable GPS.";
+          break;
+        case error.POSITION_UNAVAILABLE:
+          errorMessage = "Location unavailable. Check your signal.";
+          break;
+        case error.TIMEOUT:
+          errorMessage = "Location request timed out.";
+          break;
+      }
+      setGpsError(errorMessage);
+    };
+
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
-      (err) => {
-        let msg = "GPS Error";
-        switch(err.code) {
-          case err.PERMISSION_DENIED: msg = "Location permission denied"; break;
-          case err.POSITION_UNAVAILABLE: msg = "Location unavailable"; break;
-          case err.TIMEOUT: msg = "Location request timeout"; break;
-          default: msg = err.message || "Unknown GPS error";
-        }
-        setGpsError(msg);
-      },
+      handleError,
       { 
         enableHighAccuracy: true, 
         maximumAge: 0, 
-        timeout: 5000 
+        timeout: 10000 
       }
     );
+
     return () => {
-      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+      if (watchId.current !== null) {
+        navigator.geolocation.clearWatch(watchId.current);
+      }
     };
   }, [handlePositionUpdate]);
 
   const startNewTracking = () => {
     if (!currentPos) return;
-    setTracking(prev => ({
-      ...prev,
+    setTracking({
       isActive: true,
       startPoint: currentPos,
       path: [currentPos],
       initialAltitude: currentPos.alt,
-      currentAltitude: currentPos.alt
-    }));
+      currentAltitude: currentPos.alt,
+      altSource: tracking.altSource
+    });
   };
 
   const startNewGreen = () => {
@@ -252,10 +265,10 @@ const App: React.FC = () => {
 
   const accuracyDescription = currentPos 
     ? (currentPos.accuracy < 2 ? "Better than 2m" : currentPos.accuracy <= 5 ? "2m-5m" : ">5m") 
-    : (gpsError || "Searching GPS...");
+    : "Waiting for signal...";
 
   return (
-    <div className="flex flex-col h-screen w-full select-none bg-slate-900 font-sans text-white overflow-hidden">
+    <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white">
       <header className="p-3 flex items-center justify-between gap-2 border-b border-slate-700 bg-slate-800/95 backdrop-blur-md z-[1000]">
         <div className="flex items-center gap-1">
           <button 
@@ -293,9 +306,9 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 relative">
+      <main className="flex-1 relative flex flex-col">
         {gpsError && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-red-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 z-[2000] shadow-xl text-xs font-bold animate-pulse">
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-red-600/95 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 z-[2000] shadow-xl text-xs font-bold animate-pulse">
             <AlertTriangle size={14} />
             {gpsError}
           </div>
@@ -304,7 +317,7 @@ const App: React.FC = () => {
         <MapContainer 
           center={currentPos ? [currentPos.lat, currentPos.lng] : [0,0]} 
           zoom={21} 
-          className="h-full w-full"
+          className="flex-1 w-full"
           zoomControl={false}
           attributionControl={false}
         >
@@ -446,7 +459,8 @@ const App: React.FC = () => {
           {mode === 'Trk' ? (
             <button 
               onClick={startNewTracking}
-              className="flex items-center gap-3 px-10 py-4 bg-red-600 active:bg-red-700 text-white rounded-2xl font-black text-lg shadow-[0_8px_25px_rgba(220,38,38,0.4)] transition-all active:translate-y-1 border-b-4 border-red-800"
+              disabled={!currentPos}
+              className={`flex items-center gap-3 px-10 py-4 ${currentPos ? 'bg-red-600 active:bg-red-700 border-red-800' : 'bg-slate-700 cursor-not-allowed border-slate-800'} text-white rounded-2xl font-black text-lg shadow-[0_8px_25px_rgba(220,38,38,0.4)] transition-all active:translate-y-1 border-b-4`}
             >
               <RotateCcw size={20} />
               START NEW
@@ -455,7 +469,8 @@ const App: React.FC = () => {
             <div className="flex gap-2 w-full max-w-sm">
               <button 
                 onClick={startNewGreen}
-                className="flex-1 flex flex-col items-center justify-center gap-1 py-3.5 bg-emerald-600 text-white rounded-2xl font-black shadow-lg active:translate-y-1 transition-all border-b-4 border-emerald-800"
+                disabled={!currentPos}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${currentPos ? 'bg-emerald-600 border-emerald-800' : 'bg-slate-700 border-slate-800 cursor-not-allowed'} text-white rounded-2xl font-black shadow-lg active:translate-y-1 transition-all border-b-4`}
               >
                 <Trees size={18} />
                 <span className="text-[9px] uppercase tracking-tighter">New Green</span>
