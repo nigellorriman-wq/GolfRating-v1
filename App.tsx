@@ -40,6 +40,7 @@ const MapRefresher: React.FC<{
   isTracking: boolean 
 }> = ({ points, currentPos, mode, isTracking }) => {
   const map = useMap();
+  // Zoom level 21 approximates roughly 25-30m across a typical mobile screen width
   const TRACK_ZOOM = 21.2;
 
   useEffect(() => {
@@ -90,7 +91,9 @@ const App: React.FC = () => {
   });
 
   const watchId = useRef<number | null>(null);
+  const lastUpdateRef = useRef<number>(0);
 
+  // Barometer Initialization
   useEffect(() => {
     let sensor: any = null;
     if ('PressureSensor' in window) {
@@ -98,21 +101,28 @@ const App: React.FC = () => {
         sensor = new (window as any).PressureSensor({ frequency: 2 });
         sensor.addEventListener('reading', () => {
           setTracking(prev => ({ ...prev, altSource: 'Barometer' }));
-          setElevAccuracy(0.5); 
+          setElevAccuracy(0.5); // Barometers are generally very accurate relatively
         });
         sensor.start();
-      } catch (e) {}
+      } catch (e) {
+        console.warn("PressureSensor support detected but failed to start.");
+      }
     }
     return () => { if (sensor) sensor.stop(); };
   }, []);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
+    const now = Date.now();
+    // Enforce 0.5s update logic for the pin display
+    if (now - lastUpdateRef.current < 500) return;
+    lastUpdateRef.current = now;
+
     const newPoint: GeoPoint = {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       alt: pos.coords.altitude,
       accuracy: pos.coords.accuracy,
-      timestamp: Date.now()
+      timestamp: now
     };
 
     setGpsError(null);
@@ -125,6 +135,7 @@ const App: React.FC = () => {
     if (tracking.isActive) {
       setTracking(prev => {
         const lastInPath = prev.path[prev.path.length - 1];
+        // Only add point if moved slightly to avoid jitter line
         if (lastInPath && calculateDistance(lastInPath, newPoint) < 0.1) return prev;
         return {
           ...prev,
@@ -139,7 +150,9 @@ const App: React.FC = () => {
       setMapping(prev => {
         const lastPoint = prev.points[prev.points.length - 1];
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
+        
         const dist = calculateDistance(lastPoint, newPoint);
+        // Requirement: New point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -224,12 +237,12 @@ const App: React.FC = () => {
     <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden">
       <header className="p-3 flex items-center justify-between border-b border-slate-700 bg-slate-800/95 z-[1000] shrink-0">
         <div className="flex items-center gap-1">
-          <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-sm ${mode === 'Trk' ? 'bg-blue-600' : 'bg-slate-700 text-slate-400'}`}>Trk</button>
-          <button onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }} className={`px-4 py-2 rounded-xl font-black text-sm ${mode === 'Grn' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-400'}`}>Grn</button>
+          <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-sm transition-all active:scale-95 ${mode === 'Trk' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-700 text-slate-400'}`}>Trk</button>
+          <button onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }} className={`px-4 py-2 rounded-xl font-black text-sm transition-all active:scale-95 ${mode === 'Grn' ? 'bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 'bg-slate-700 text-slate-400'}`}>Grn</button>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"><MapIcon size={12} /><span className="text-[10px] font-black uppercase">{mapProvider}</span></button>
-          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"><Ruler size={12} /><span className="text-[10px] font-black uppercase">{units}</span></button>
+          <button onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 active:bg-slate-600 transition-colors"><MapIcon size={12} /><span className="text-[10px] font-black uppercase">{mapProvider}</span></button>
+          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 active:bg-slate-600 transition-colors"><Ruler size={12} /><span className="text-[10px] font-black uppercase">{units}</span></button>
         </div>
       </header>
 
@@ -267,15 +280,15 @@ const App: React.FC = () => {
 
         {gpsError && (
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-[2000] flex flex-col items-center justify-center p-6 text-center">
-            <p className="text-red-400 font-bold mb-4">GPS Error: {gpsError}</p>
-            <button onClick={startGps} className="px-6 py-3 bg-blue-600 rounded-xl font-bold">Retry GPS Connection</button>
+            <p className="text-red-400 font-bold mb-4">GPS Connection Needed: {gpsError}</p>
+            <button onClick={startGps} className="px-6 py-3 bg-blue-600 rounded-xl font-bold shadow-lg active:scale-95 transition-all">Enable Location Access</button>
           </div>
         )}
 
         {/* HUD Data Overlays */}
         <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
           {mode === 'Trk' ? (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between">
+            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between animate-in fade-in slide-in-from-top-4 duration-500">
               <div className="text-center flex-1 border-r border-slate-800">
                 <p className="text-[9px] text-slate-500 font-black uppercase">Distance</p>
                 <p className="text-2xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-[10px] ml-1">{units === 'Yards' ? 'yd' : 'm'}</span></p>
@@ -286,41 +299,41 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : mapMetrics && (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
-              <div className="bg-slate-800/60 p-1.5 rounded-lg"><p className="text-[8px] text-slate-500 font-bold">PERIMETER</p><p className="font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg"><p className="text-[8px] text-slate-500 font-bold">BUNKER</p><p className="font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg"><p className="text-[8px] text-slate-500 font-bold">AREA</p><p className="font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[8px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg"><p className="text-[8px] text-slate-500 font-bold">RATIO</p><p className="font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
+            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 animate-in zoom-in duration-300">
+              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">PERIMETER</p><p className="font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">BUNKER</p><p className="font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">AREA</p><p className="font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[8px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
+              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">RATIO</p><p className="font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
             </div>
           )}
         </div>
 
         {/* Sensor info Overlay */}
-        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px]">
-          <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black">{tracking.altSource}</span></div>
-          <div className="flex items-center justify-between gap-4"><span>Elev Acc:</span><span className="font-black">{elevAccuracy ? `${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
+        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px] animate-in slide-in-from-right-4 duration-500">
+          <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
+          <div className="flex items-center justify-between gap-4"><span>Elev Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
           <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${currentPos && currentPos.accuracy < 2 ? 'bg-emerald-500' : (currentPos && currentPos.accuracy <= 5) ? 'bg-yellow-500' : 'bg-red-500'}`} />
-            <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'Searching...'}</span>
+            <div className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${currentPos && currentPos.accuracy < 2 ? 'bg-emerald-500 text-emerald-500' : (currentPos && currentPos.accuracy <= 5) ? 'bg-yellow-500 text-yellow-500' : 'bg-red-500 text-red-500'}`} />
+            <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'Waiting for GPS...'}</span>
           </div>
         </div>
 
         <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
           {mode === 'Trk' ? (
-            <button onClick={startNewTracking} disabled={!currentPos} className={`px-10 py-4 text-white rounded-2xl font-black shadow-xl flex items-center gap-2 transition-all ${currentPos ? 'bg-red-600 active:scale-95' : 'bg-slate-700 opacity-50'}`}>
+            <button onClick={startNewTracking} disabled={!currentPos} className={`px-10 py-4 text-white rounded-2xl font-black shadow-xl flex items-center gap-2 transition-all ${currentPos ? 'bg-red-600 active:scale-95 shadow-red-900/40' : 'bg-slate-700 opacity-50 cursor-not-allowed'}`}>
               <RotateCcw size={18} /> START NEW
             </button>
           ) : (
-            <div className="flex gap-2 w-full max-w-sm">
-              <button onClick={startNewGreen} disabled={!currentPos} className="flex-1 py-4 bg-emerald-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg disabled:opacity-50">New Green</button>
+            <div className="flex gap-2 w-full max-w-sm px-2">
+              <button onClick={startNewGreen} disabled={!currentPos} className="flex-1 py-4 bg-emerald-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg disabled:opacity-50 transition-all border border-emerald-500/30">New Green</button>
               <button 
                 onTouchStart={(e) => { e.preventDefault(); toggleBunker(true); }} 
                 onTouchEnd={(e) => { e.preventDefault(); toggleBunker(false); }} 
                 onMouseDown={() => toggleBunker(true)} 
                 onMouseUp={() => toggleBunker(false)}
-                className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-colors ${mapping.isBunkerActive ? 'bg-amber-400 text-black' : 'bg-slate-700'}`}
+                className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-300 scale-105 shadow-amber-900/40' : 'bg-slate-700 border-slate-600'}`}
               >Bunker</button>
-              <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg">Close</button>
+              <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border border-blue-500/30">Close</button>
             </div>
           )}
         </div>
