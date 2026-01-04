@@ -11,7 +11,7 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Activity, Trees, Info, ShieldAlert } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, Activity, Trees, Info, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 // Fix for default marker icons in Leaflet when using ESM
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -54,7 +54,6 @@ const MapRefresher: React.FC<{
         if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 21 });
       } else if (currentPos) {
-        // Zoom 21 provides roughly 25m horizontal view on most devices
         map.setView([currentPos.lat, currentPos.lng], 21);
       }
     } else if (mode === 'Grn') {
@@ -76,6 +75,7 @@ const App: React.FC = () => {
   const [mapProvider, setMapProvider] = useState<MapProvider>('Google');
   const [units, setUnits] = useState<UnitSystem>('Yards');
   const [elevAccuracy, setElevAccuracy] = useState<number | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
   const [tracking, setTracking] = useState<TrackingState>({
@@ -96,7 +96,6 @@ const App: React.FC = () => {
 
   const watchId = useRef<number | null>(null);
 
-  // Barometer logic
   useEffect(() => {
     if ('PressureSensor' in window) {
       try {
@@ -121,6 +120,7 @@ const App: React.FC = () => {
       timestamp: Date.now()
     };
 
+    setGpsError(null);
     setCurrentPos(newPoint);
     if (tracking.altSource !== 'Barometer') {
       setElevAccuracy(pos.coords.altitudeAccuracy || null);
@@ -146,7 +146,6 @@ const App: React.FC = () => {
            return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         }
         const dist = calculateDistance(lastPoint, newPoint);
-        // Requirement: Insert point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -157,14 +156,27 @@ const App: React.FC = () => {
   }, [tracking.isActive, tracking.altSource, mapping.isActive, mapping.isClosed]);
 
   useEffect(() => {
-    // Attempt high frequency polling
+    if (!navigator.geolocation) {
+      setGpsError("Geolocation not supported");
+      return;
+    }
+
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
-      (err) => console.error("GPS Error:", err),
+      (err) => {
+        let msg = "GPS Error";
+        switch(err.code) {
+          case err.PERMISSION_DENIED: msg = "Location permission denied"; break;
+          case err.POSITION_UNAVAILABLE: msg = "Location unavailable"; break;
+          case err.TIMEOUT: msg = "Location request timeout"; break;
+          default: msg = err.message || "Unknown GPS error";
+        }
+        setGpsError(msg);
+      },
       { 
         enableHighAccuracy: true, 
         maximumAge: 0, 
-        timeout: 2000 
+        timeout: 5000 
       }
     );
     return () => {
@@ -200,7 +212,6 @@ const App: React.FC = () => {
     setMapping(prev => {
       if (prev.isBunkerActive === active) return prev;
       const type: PointType = active ? 'bunker' : 'green';
-      // Force immediate point insertion on state change for clean transitions
       const latestPoints = currentPos ? [...prev.points, { ...currentPos, type }] : prev.points;
       return { 
         ...prev, 
@@ -241,7 +252,7 @@ const App: React.FC = () => {
 
   const accuracyDescription = currentPos 
     ? (currentPos.accuracy < 2 ? "Better than 2m" : currentPos.accuracy <= 5 ? "2m-5m" : ">5m") 
-    : "Searching GPS...";
+    : (gpsError || "Searching GPS...");
 
   return (
     <div className="flex flex-col h-screen w-full select-none bg-slate-900 font-sans text-white overflow-hidden">
@@ -283,6 +294,13 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 relative">
+        {gpsError && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-red-600/90 backdrop-blur-md text-white px-4 py-2 rounded-full flex items-center gap-2 z-[2000] shadow-xl text-xs font-bold animate-pulse">
+            <AlertTriangle size={14} />
+            {gpsError}
+          </div>
+        )}
+
         <MapContainer 
           center={currentPos ? [currentPos.lat, currentPos.lng] : [0,0]} 
           zoom={21} 
