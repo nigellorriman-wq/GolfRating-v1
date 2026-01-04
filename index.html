@@ -22,6 +22,9 @@
 }
 </script>
     <style>
+      :root {
+        --app-height: 100%;
+      }
       html, body { 
         margin: 0; 
         padding: 0; 
@@ -43,16 +46,27 @@
         height: 100%; 
         width: 100%;
       }
+      /* Prevent UI interactions that interfere with mapping */
       * {
         -webkit-touch-callout: none;
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
+      input, textarea {
+        user-select: text;
+      }
     </style>
 </head>
 <body class="bg-slate-900 text-white">
-    <div id="root"></div>
+    <div id="root">
+      <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: #475569;">
+        <div style="text-align: center;">
+          <p style="font-size: 1.25rem; font-weight: 800; color: #cbd5e1; margin-bottom: 0.5rem;">PROGOLF</p>
+          <p style="font-size: 0.875rem;">Initializing system...</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/index.tsx"></script>
 </body>
 </html>

@@ -106,7 +106,7 @@ const App: React.FC = () => {
         });
         sensor.start();
       } catch (e) {
-        console.warn('Barometer access failed', e);
+        console.warn('Barometer not available or access denied', e);
       }
     }
   }, []);
@@ -147,6 +147,7 @@ const App: React.FC = () => {
            return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         }
         const dist = calculateDistance(lastPoint, newPoint);
+        // Requirement: Insert point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -163,20 +164,31 @@ const App: React.FC = () => {
     }
 
     const handleError = (error: GeolocationPositionError) => {
-      let errorMessage = "GPS Error";
-      switch (error.code) {
-        case error.PERMISSION_DENIED: errorMessage = "GPS Permission Denied"; break;
-        case error.POSITION_UNAVAILABLE: errorMessage = "GPS Signal Lost"; break;
-        case error.TIMEOUT: errorMessage = "GPS Request Timeout"; break;
-        default: errorMessage = error.message;
+      let msg = "GPS Error";
+      switch(error.code) {
+        case error.PERMISSION_DENIED:
+          msg = "Permission Denied: Please enable Location services.";
+          break;
+        case error.POSITION_UNAVAILABLE:
+          msg = "Signal Lost: Check your surroundings.";
+          break;
+        case error.TIMEOUT:
+          msg = "Request Timed Out: Retrying...";
+          break;
+        default:
+          msg = error.message || "Unknown Location Error";
       }
-      setGpsError(errorMessage);
+      setGpsError(msg);
     };
 
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       handleError,
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+      { 
+        enableHighAccuracy: true, 
+        maximumAge: 0, 
+        timeout: 10000 
+      }
     );
 
     return () => {
@@ -243,7 +255,7 @@ const App: React.FC = () => {
 
   const accuracyDescription = currentPos 
     ? (currentPos.accuracy < 2 ? "Better than 2m" : currentPos.accuracy <= 5 ? "2m-5m" : ">5m") 
-    : (gpsError || "Locating GPS...");
+    : (gpsError || "Locating...");
 
   return (
     <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden">
@@ -251,25 +263,25 @@ const App: React.FC = () => {
         <div className="flex items-center gap-1">
           <button 
             onClick={() => setMode('Trk')}
-            className={`px-4 py-2 rounded-xl font-black text-sm transition-all ${mode === 'Trk' ? 'bg-blue-600 shadow-lg' : 'bg-slate-700 text-slate-400'}`}
+            className={`px-4 py-2 rounded-xl font-black text-sm transition-all shadow-lg ${mode === 'Trk' ? 'bg-blue-600' : 'bg-slate-700 text-slate-400'}`}
           >Trk</button>
           <button 
             onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }}
-            className={`px-4 py-2 rounded-xl font-black text-sm transition-all ${mode === 'Grn' ? 'bg-emerald-600 shadow-lg' : 'bg-slate-700 text-slate-400'}`}
+            className={`px-4 py-2 rounded-xl font-black text-sm transition-all shadow-lg ${mode === 'Grn' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-400'}`}
           >Grn</button>
         </div>
 
         <div className="flex items-center gap-1">
           <button 
             onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')}
-            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"
+            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 shadow-sm"
           >
             <MapIcon size={12} />
             <span className="text-[10px] uppercase font-black">{mapProvider}</span>
           </button>
           <button 
             onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')}
-            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"
+            className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 shadow-sm"
           >
             <Ruler size={12} />
             <span className="text-[10px] uppercase font-black">{units}</span>
@@ -296,7 +308,15 @@ const App: React.FC = () => {
           {currentPos && (
             <>
               <Marker position={[currentPos.lat, currentPos.lng]} icon={blueIcon} />
-              <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.3 }} />
+              <Circle 
+                center={[currentPos.lat, currentPos.lng]} 
+                radius={currentPos.accuracy} 
+                pathOptions={{ 
+                  fillColor: getAccuracyColor(currentPos.accuracy), 
+                  color: 'transparent', 
+                  fillOpacity: 0.3 
+                }} 
+              />
             </>
           )}
 
@@ -327,20 +347,20 @@ const App: React.FC = () => {
 
         <div className="absolute top-4 left-4 right-4 pointer-events-none flex flex-col gap-3 z-[1001]">
           {mode === 'Trk' && (
-            <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between items-center">
+            <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between items-center pointer-events-auto">
               <div className="text-center flex-1 border-r border-slate-800">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-0.5">Distance</p>
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-0.5 tracking-tighter">Distance</p>
                 <p className="text-2xl font-black text-blue-400 tabular-nums">{toDisplayDistance(totalDistance, units)}<span className="text-[10px] ml-1 opacity-60 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span></p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-[9px] text-slate-500 font-black uppercase mb-0.5">Elev Δ</p>
+                <p className="text-[9px] text-slate-500 font-black uppercase mb-0.5 tracking-tighter">Elev Δ</p>
                 <p className="text-2xl font-black text-amber-400 tabular-nums">{toDisplayElevation(elevationChange, units)}<span className="text-[10px] ml-1 opacity-60 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></p>
               </div>
             </div>
           )}
 
           {mode === 'Grn' && mapMetrics && (
-             <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
+             <div className="bg-slate-900/90 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 pointer-events-auto">
                <div className="bg-slate-800/60 p-2 rounded-xl border border-white/5">
                  <p className="text-[8px] text-slate-500 font-black uppercase">Perimeter</p>
                  <p className="text-base font-black text-emerald-400 truncate">{toDisplayDistance(mapMetrics.totalLen, units)} {units === 'Yards' ? 'yd' : 'm'}</p>
@@ -376,24 +396,37 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
+        <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001] pointer-events-auto">
           {mode === 'Trk' ? (
-            <button onClick={startNewTracking} disabled={!currentPos} className={`flex items-center gap-3 px-10 py-4 ${currentPos ? 'bg-red-600 active:bg-red-700 border-red-800' : 'bg-slate-700 cursor-not-allowed border-slate-800'} text-white rounded-2xl font-black text-lg shadow-xl border-b-4 transition-all`}>
+            <button 
+              onClick={startNewTracking} 
+              disabled={!currentPos} 
+              className={`flex items-center gap-3 px-10 py-4 ${currentPos ? 'bg-red-600 active:bg-red-700 border-red-800' : 'bg-slate-700 cursor-not-allowed border-slate-800'} text-white rounded-2xl font-black text-lg shadow-xl border-b-4 transition-all active:translate-y-1`}
+            >
               <RotateCcw size={20} /> START NEW
             </button>
           ) : (
             <div className="flex gap-2 w-full max-w-sm">
-              <button onClick={startNewGreen} disabled={!currentPos} className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${currentPos ? 'bg-emerald-600 border-emerald-800' : 'bg-slate-700 border-slate-800 cursor-not-allowed'} text-white rounded-2xl font-black shadow-lg active:translate-y-1 border-b-4`}>
+              <button 
+                onClick={startNewGreen} 
+                disabled={!currentPos} 
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${currentPos ? 'bg-emerald-600 border-emerald-800' : 'bg-slate-700 border-slate-800 cursor-not-allowed'} text-white rounded-2xl font-black shadow-lg active:translate-y-1 border-b-4`}
+              >
                 <Trees size={18} /> <span className="text-[9px] uppercase tracking-tighter">New Green</span>
               </button>
               <button 
-                onMouseDown={() => toggleBunker(true)} onMouseUp={() => toggleBunker(false)} 
-                onTouchStart={(e) => { e.preventDefault(); toggleBunker(true); }} onTouchEnd={(e) => { e.preventDefault(); toggleBunker(false); }}
+                onMouseDown={() => toggleBunker(true)} 
+                onMouseUp={() => toggleBunker(false)} 
+                onTouchStart={(e) => { toggleBunker(true); }} 
+                onTouchEnd={(e) => { toggleBunker(false); }}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 py-3.5 ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-600' : 'bg-slate-700 text-white border-slate-900'} rounded-2xl font-black shadow-lg border-b-4`}
               >
                 <ShieldAlert size={18} /> <span className="text-[9px] uppercase tracking-tighter">Bunker</span>
               </button>
-              <button onClick={closeMapping} className="flex-1 flex flex-col items-center justify-center gap-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black shadow-lg active:translate-y-1 border-b-4 border-blue-800">
+              <button 
+                onClick={closeMapping} 
+                className="flex-1 flex flex-col items-center justify-center gap-1 py-3.5 bg-blue-600 text-white rounded-2xl font-black shadow-lg active:translate-y-1 border-b-4 border-blue-800"
+              >
                 <div className="w-4 h-4 border-2 border-white rounded-sm" /> <span className="text-[9px] uppercase tracking-tighter">Close</span>
               </button>
             </div>
