@@ -1,0 +1,7 @@
+{
+  "name": "GolfRating-v2",
+  "description": "A precision golf measurement tool for tracking distances, elevation changes, and mapping green perimeters with bunker analysis.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
