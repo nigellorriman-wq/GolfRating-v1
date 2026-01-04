@@ -11,7 +11,7 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, Satellite, Search } from 'lucide-react';
 
 // Standard Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -40,7 +40,6 @@ const MapRefresher: React.FC<{
   isTracking: boolean 
 }> = ({ points, currentPos, mode, isTracking }) => {
   const map = useMap();
-  // Zoom level 21 approximates roughly 25-30m across a typical mobile screen width
   const TRACK_ZOOM = 21.2;
 
   useEffect(() => {
@@ -73,6 +72,7 @@ const App: React.FC = () => {
   const [elevAccuracy, setElevAccuracy] = useState<number | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
+  const [isGpsInitializing, setIsGpsInitializing] = useState(true);
 
   const [tracking, setTracking] = useState<TrackingState>({
     isActive: false,
@@ -93,7 +93,7 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
 
-  // Barometer Initialization
+  // Barometer
   useEffect(() => {
     let sensor: any = null;
     if ('PressureSensor' in window) {
@@ -101,11 +101,11 @@ const App: React.FC = () => {
         sensor = new (window as any).PressureSensor({ frequency: 2 });
         sensor.addEventListener('reading', () => {
           setTracking(prev => ({ ...prev, altSource: 'Barometer' }));
-          setElevAccuracy(0.5); // Barometers are generally very accurate relatively
+          setElevAccuracy(0.5); 
         });
         sensor.start();
       } catch (e) {
-        console.warn("PressureSensor support detected but failed to start.");
+        console.warn("Pressure sensor unavailable.");
       }
     }
     return () => { if (sensor) sensor.stop(); };
@@ -113,7 +113,6 @@ const App: React.FC = () => {
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
-    // Enforce 0.5s update logic for the pin display
     if (now - lastUpdateRef.current < 500) return;
     lastUpdateRef.current = now;
 
@@ -127,7 +126,12 @@ const App: React.FC = () => {
 
     setGpsError(null);
     setCurrentPos(newPoint);
+    setIsGpsInitializing(false);
     
+    // Hide splash screen if it's still there
+    const splash = document.getElementById('splash');
+    if (splash) splash.style.display = 'none';
+
     if (tracking.altSource !== 'Barometer') {
       setElevAccuracy(pos.coords.altitudeAccuracy || null);
     }
@@ -135,7 +139,6 @@ const App: React.FC = () => {
     if (tracking.isActive) {
       setTracking(prev => {
         const lastInPath = prev.path[prev.path.length - 1];
-        // Only add point if moved slightly to avoid jitter line
         if (lastInPath && calculateDistance(lastInPath, newPoint) < 0.1) return prev;
         return {
           ...prev,
@@ -150,9 +153,7 @@ const App: React.FC = () => {
       setMapping(prev => {
         const lastPoint = prev.points[prev.points.length - 1];
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
-        
         const dist = calculateDistance(lastPoint, newPoint);
-        // Requirement: New point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -167,11 +168,26 @@ const App: React.FC = () => {
       setGpsError("GPS Not Supported");
       return;
     }
+    
+    // Clear existing
     if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    
+    // Fused model: First, try to get a quick "cached" or "approximate" location
+    navigator.geolocation.getCurrentPosition(
+      handlePositionUpdate,
+      (err) => console.log("Fused init error", err),
+      { enableHighAccuracy: false, maximumAge: 60000, timeout: 5000 }
+    );
+
+    // Then, start the high-precision watcher
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       (err) => setGpsError(err.message),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+      { 
+        enableHighAccuracy: true, 
+        maximumAge: 0, 
+        timeout: 20000 
+      }
     );
   }, [handlePositionUpdate]);
 
@@ -234,7 +250,7 @@ const App: React.FC = () => {
   }, [mapping.points, mapping.isClosed]);
 
   return (
-    <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden">
+    <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden relative">
       <header className="p-3 flex items-center justify-between border-b border-slate-700 bg-slate-800/95 z-[1000] shrink-0">
         <div className="flex items-center gap-1">
           <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-sm transition-all active:scale-95 ${mode === 'Trk' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-700 text-slate-400'}`}>Trk</button>
@@ -278,17 +294,28 @@ const App: React.FC = () => {
           )}
         </MapContainer>
 
+        {isGpsInitializing && (
+          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md z-[2000] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-700">
+            <div className="w-16 h-16 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-6"></div>
+            <h2 className="text-xl font-black mb-2 tracking-widest uppercase">Acquiring Lock</h2>
+            <p className="text-slate-400 text-sm max-w-xs mb-8 italic">Using fused location data to determine coordinates...</p>
+            <button onClick={startGps} className="px-8 py-3 bg-slate-800 border border-slate-700 rounded-2xl font-bold flex items-center gap-2 active:scale-95 transition-all">
+              <Search size={18} /> Re-probe Sensors
+            </button>
+          </div>
+        )}
+
         {gpsError && (
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-[2000] flex flex-col items-center justify-center p-6 text-center">
-            <p className="text-red-400 font-bold mb-4">GPS Connection Needed: {gpsError}</p>
-            <button onClick={startGps} className="px-6 py-3 bg-blue-600 rounded-xl font-bold shadow-lg active:scale-95 transition-all">Enable Location Access</button>
+          <div className="absolute inset-x-4 top-20 bg-red-900/90 border border-red-500/50 p-4 rounded-2xl z-[2000] flex flex-col items-center text-center shadow-2xl">
+            <p className="text-white font-bold mb-3 flex items-center gap-2"><Satellite size={16} /> GPS Unstable: {gpsError}</p>
+            <button onClick={startGps} className="w-full py-2 bg-white text-red-900 rounded-xl font-black text-xs uppercase">Retry High-Precision Link</button>
           </div>
         )}
 
         {/* HUD Data Overlays */}
         <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
           {mode === 'Trk' ? (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between">
               <div className="text-center flex-1 border-r border-slate-800">
                 <p className="text-[9px] text-slate-500 font-black uppercase">Distance</p>
                 <p className="text-2xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-[10px] ml-1">{units === 'Yards' ? 'yd' : 'm'}</span></p>
@@ -299,7 +326,7 @@ const App: React.FC = () => {
               </div>
             </div>
           ) : mapMetrics && (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 animate-in zoom-in duration-300">
+            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
               <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">PERIMETER</p><p className="font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
               <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">BUNKER</p><p className="font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
               <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">AREA</p><p className="font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[8px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
@@ -309,12 +336,12 @@ const App: React.FC = () => {
         </div>
 
         {/* Sensor info Overlay */}
-        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px] animate-in slide-in-from-right-4 duration-500">
-          <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
-          <div className="flex items-center justify-between gap-4"><span>Elev Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
+        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px]">
+          <div className="flex items-center justify-between gap-4"><span>Alt Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
+          <div className="flex items-center justify-between gap-4"><span>Alt Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `±${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
           <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${currentPos && currentPos.accuracy < 2 ? 'bg-emerald-500 text-emerald-500' : (currentPos && currentPos.accuracy <= 5) ? 'bg-yellow-500 text-yellow-500' : 'bg-red-500 text-red-500'}`} />
-            <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'Waiting for GPS...'}</span>
+            <span className="font-bold uppercase tracking-tighter">{currentPos ? `Fused Accuracy: ±${currentPos.accuracy.toFixed(1)}m` : 'Scanning Signal...'}</span>
           </div>
         </div>
 
