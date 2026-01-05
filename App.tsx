@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   AppMode, 
@@ -12,7 +11,7 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Satellite, Search, Navigation, AlertTriangle, Loader2 } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, Satellite, Search, Navigation, AlertTriangle, Loader2, Zap } from 'lucide-react';
 
 // Standard Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -74,6 +73,7 @@ const App: React.FC = () => {
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
   const [isGpsInitializing, setIsGpsInitializing] = useState(true);
+  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
 
   const [tracking, setTracking] = useState<TrackingState>({
     isActive: false,
@@ -93,6 +93,50 @@ const App: React.FC = () => {
 
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
+  const wakeLockRef = useRef<any>(null);
+
+  // Screen Wake Lock Logic
+  const requestWakeLock = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        setIsWakeLockActive(true);
+        wakeLockRef.current.addEventListener('release', () => {
+          setIsWakeLockActive(false);
+        });
+      } catch (err) {
+        console.warn('Wake Lock request failed:', err);
+      }
+    }
+  };
+
+  const releaseWakeLock = () => {
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release();
+      wakeLockRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    // Keep screen on if user is actually measuring/tracking
+    if (tracking.isActive || (mapping.isActive && !mapping.isClosed)) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+    return () => releaseWakeLock();
+  }, [tracking.isActive, mapping.isActive, mapping.isClosed]);
+
+  // Handle visibility change (re-request wake lock if tab becomes visible again)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (wakeLockRef.current !== null && document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   // Immediate removal of HTML splash once React mounts
   useEffect(() => {
@@ -101,7 +145,7 @@ const App: React.FC = () => {
       splash.style.opacity = '0';
       setTimeout(() => splash.style.display = 'none', 500);
     }
-    console.log("ProGolf: App mounted, splash dismissed.");
+    console.log("ProGolf: Standalone optimized shell active.");
   }, []);
 
   // Barometer Initialization
@@ -124,7 +168,6 @@ const App: React.FC = () => {
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
-    // Requirements: 0.5s updates for the pin/tracking line
     if (now - lastUpdateRef.current < 500) return;
     lastUpdateRef.current = now;
 
@@ -162,7 +205,6 @@ const App: React.FC = () => {
         const lastPoint = prev.points[prev.points.length - 1];
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         const dist = calculateDistance(lastPoint, newPoint);
-        // Requirement: Insert point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -183,14 +225,12 @@ const App: React.FC = () => {
       navigator.geolocation.clearWatch(watchId.current);
     }
     
-    // Fused Location Stage 1: Fast fix (low accuracy, high speed) to get the map centered
     navigator.geolocation.getCurrentPosition(
       (pos) => handlePositionUpdate(pos),
       (err) => console.warn("ProGolf: Initial fused fix failed", err),
       { enableHighAccuracy: false, maximumAge: 30000, timeout: 5000 }
     );
 
-    // Fused Location Stage 2: High accuracy continuous stream
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       (err) => {
@@ -236,7 +276,6 @@ const App: React.FC = () => {
     setMapping(prev => {
       if (prev.isBunkerActive === active) return prev;
       const type: PointType = active ? 'bunker' : 'green';
-      // FIX: Use currentPos instead of newPoint as newPoint is only available within handlePositionUpdate scope.
       const latestPoints = currentPos ? [...prev.points, { ...currentPos, type }] : prev.points;
       return { ...prev, isBunkerActive: active, points: latestPoints };
     });
@@ -265,6 +304,9 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden relative">
+      {/* Immersive Black Translucent Overlay for notched phones */}
+      <div className="h-[env(safe-area-inset-top)] w-full bg-slate-800 shrink-0"></div>
+
       <header className="p-3 flex items-center justify-between border-b border-slate-700 bg-slate-800/95 z-[1000] shrink-0">
         <div className="flex items-center gap-1">
           <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-sm transition-all active:scale-95 ${mode === 'Trk' ? 'bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'bg-slate-700 text-slate-400'}`}>Trk</button>
@@ -277,7 +319,6 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col">
-        {/* Map is always visible to avoid "white screen" feel */}
         <MapContainer center={[0,0]} zoom={3} className="w-full h-full absolute inset-0" zoomControl={false} attributionControl={false}>
           {mapProvider === 'OSM' ? (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
@@ -309,7 +350,6 @@ const App: React.FC = () => {
           )}
         </MapContainer>
 
-        {/* GPS Hunting Overlay (Non-blocking) */}
         {isGpsInitializing && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 bg-slate-900/90 backdrop-blur-md p-6 rounded-3xl border border-slate-700 shadow-2xl z-[2000] flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
             <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
@@ -356,9 +396,15 @@ const App: React.FC = () => {
 
         {/* Sensor Info HUD */}
         {!isGpsInitializing && (
-          <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px] animate-in slide-in-from-right duration-500">
+          <div className="absolute bottom-32 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px] animate-in slide-in-from-right duration-500">
+            <div className="flex items-center justify-between gap-4">
+               <span>Wake Lock:</span>
+               <span className={`font-black flex items-center gap-1 ${isWakeLockActive ? 'text-emerald-400' : 'text-slate-500'}`}>
+                 <Zap size={8} fill={isWakeLockActive ? 'currentColor' : 'none'} />
+                 {isWakeLockActive ? 'ON' : 'OFF'}
+               </span>
+            </div>
             <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
-            <div className="flex items-center justify-between gap-4"><span>Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `±${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
             <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${currentPos && currentPos.accuracy < 3 ? 'bg-emerald-500 text-emerald-500' : (currentPos && currentPos.accuracy <= 10) ? 'bg-yellow-500 text-yellow-500' : 'bg-red-500 text-red-500'}`} />
               <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'No Signal'}</span>
@@ -389,6 +435,9 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
+      
+      {/* Bottom Safe Area spacing */}
+      <div className="h-[env(safe-area-inset-bottom)] w-full bg-slate-900 shrink-0"></div>
     </div>
   );
 };
