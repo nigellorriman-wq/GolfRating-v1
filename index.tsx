@@ -7,6 +7,9 @@ const log = (window as any).progolfLog || console.log;
 log("index.tsx: Execution started.");
 log(`index.tsx: Detected React Version: ${React.version}`);
 
+// Signal ready early to stop the timeout timer
+(window as any).progolfAppReady = true;
+
 const rootElement = document.getElementById('root');
 if (rootElement) {
   try {
@@ -14,9 +17,7 @@ if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
     log("index.tsx: Invoking render...");
     root.render(<App />);
-    // Signal ready so the timeout monitor knows JS executed successfully
-    (window as any).progolfAppReady = true;
-    log("index.tsx: Signal READY sent.");
+    log("index.tsx: Render call complete.");
   } catch (err) {
     log("index.tsx: ERROR during initial render call: " + String(err), 'ERROR');
   }
