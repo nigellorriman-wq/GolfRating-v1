@@ -5,14 +5,14 @@ import {
   GeoPoint, 
   TrackingState, 
   MappingState
-} from './types.ts';
+} from './types';
 import { 
   calculateDistance, 
   toDisplayDistance, 
   toDisplayElevation, 
   calculatePolygonArea, 
   getAccuracyColor 
-} from './utils/geoUtils.ts';
+} from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
 import { Ruler, RotateCcw, Navigation, Target, Activity } from 'lucide-react';
@@ -84,16 +84,6 @@ const App: React.FC = () => {
   });
 
   const watchId = useRef<number | null>(null);
-
-  useEffect(() => {
-    const splash = document.getElementById('splash');
-    if (splash) {
-      setTimeout(() => {
-        splash.style.opacity = '0';
-        setTimeout(() => splash.style.display = 'none', 500);
-      }, 1000);
-    }
-  }, []);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
