@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   AppMode, 
@@ -11,7 +12,7 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Satellite, Search } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, Satellite, Search, Navigation, AlertTriangle, Loader2 } from 'lucide-react';
 
 // Standard Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -93,7 +94,17 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
 
-  // Barometer
+  // Immediate removal of HTML splash once React mounts
+  useEffect(() => {
+    const splash = document.getElementById('splash');
+    if (splash) {
+      splash.style.opacity = '0';
+      setTimeout(() => splash.style.display = 'none', 500);
+    }
+    console.log("ProGolf: App mounted, splash dismissed.");
+  }, []);
+
+  // Barometer Initialization
   useEffect(() => {
     let sensor: any = null;
     if ('PressureSensor' in window) {
@@ -105,7 +116,7 @@ const App: React.FC = () => {
         });
         sensor.start();
       } catch (e) {
-        console.warn("Pressure sensor unavailable.");
+        console.warn("ProGolf: Pressure sensor failed to start.");
       }
     }
     return () => { if (sensor) sensor.stop(); };
@@ -113,6 +124,7 @@ const App: React.FC = () => {
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
+    // Requirements: 0.5s updates for the pin/tracking line
     if (now - lastUpdateRef.current < 500) return;
     lastUpdateRef.current = now;
 
@@ -128,10 +140,6 @@ const App: React.FC = () => {
     setCurrentPos(newPoint);
     setIsGpsInitializing(false);
     
-    // Hide splash screen if it's still there
-    const splash = document.getElementById('splash');
-    if (splash) splash.style.display = 'none';
-
     if (tracking.altSource !== 'Barometer') {
       setElevAccuracy(pos.coords.altitudeAccuracy || null);
     }
@@ -154,6 +162,7 @@ const App: React.FC = () => {
         const lastPoint = prev.points[prev.points.length - 1];
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         const dist = calculateDistance(lastPoint, newPoint);
+        // Requirement: Insert point every 0.5m
         if (dist >= 0.5) {
           const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
           return { ...prev, points: [...prev.points, { ...newPoint, type }] };
@@ -165,29 +174,33 @@ const App: React.FC = () => {
 
   const startGps = useCallback(() => {
     if (!navigator.geolocation) {
-      setGpsError("GPS Not Supported");
+      setGpsError("Geolocation is not supported by this browser.");
       return;
     }
     
-    // Clear existing
-    if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+    setGpsError(null);
+    if (watchId.current !== null) {
+      navigator.geolocation.clearWatch(watchId.current);
+    }
     
-    // Fused model: First, try to get a quick "cached" or "approximate" location
+    // Fused Location Stage 1: Fast fix (low accuracy, high speed) to get the map centered
     navigator.geolocation.getCurrentPosition(
-      handlePositionUpdate,
-      (err) => console.log("Fused init error", err),
-      { enableHighAccuracy: false, maximumAge: 60000, timeout: 5000 }
+      (pos) => handlePositionUpdate(pos),
+      (err) => console.warn("ProGolf: Initial fused fix failed", err),
+      { enableHighAccuracy: false, maximumAge: 30000, timeout: 5000 }
     );
 
-    // Then, start the high-precision watcher
+    // Fused Location Stage 2: High accuracy continuous stream
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
-      (err) => setGpsError(err.message),
-      { 
-        enableHighAccuracy: true, 
-        maximumAge: 0, 
-        timeout: 20000 
-      }
+      (err) => {
+        let msg = "Connection Error";
+        if (err.code === 1) msg = "Location Access Denied.";
+        else if (err.code === 2) msg = "Signal Lost.";
+        else if (err.code === 3) msg = "Satellite Lock Timeout.";
+        setGpsError(msg);
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
     );
   }, [handlePositionUpdate]);
 
@@ -223,6 +236,7 @@ const App: React.FC = () => {
     setMapping(prev => {
       if (prev.isBunkerActive === active) return prev;
       const type: PointType = active ? 'bunker' : 'green';
+      // FIX: Use currentPos instead of newPoint as newPoint is only available within handlePositionUpdate scope.
       const latestPoints = currentPos ? [...prev.points, { ...currentPos, type }] : prev.points;
       return { ...prev, isBunkerActive: active, points: latestPoints };
     });
@@ -263,6 +277,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col">
+        {/* Map is always visible to avoid "white screen" feel */}
         <MapContainer center={[0,0]} zoom={3} className="w-full h-full absolute inset-0" zoomControl={false} attributionControl={false}>
           {mapProvider === 'OSM' ? (
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
@@ -294,76 +309,85 @@ const App: React.FC = () => {
           )}
         </MapContainer>
 
+        {/* GPS Hunting Overlay (Non-blocking) */}
         {isGpsInitializing && (
-          <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md z-[2000] flex flex-col items-center justify-center p-8 text-center animate-in fade-in duration-700">
-            <div className="w-16 h-16 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mb-6"></div>
-            <h2 className="text-xl font-black mb-2 tracking-widest uppercase">Acquiring Lock</h2>
-            <p className="text-slate-400 text-sm max-w-xs mb-8 italic">Using fused location data to determine coordinates...</p>
-            <button onClick={startGps} className="px-8 py-3 bg-slate-800 border border-slate-700 rounded-2xl font-bold flex items-center gap-2 active:scale-95 transition-all">
-              <Search size={18} /> Re-probe Sensors
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 bg-slate-900/90 backdrop-blur-md p-6 rounded-3xl border border-slate-700 shadow-2xl z-[2000] flex flex-col items-center text-center animate-in fade-in zoom-in duration-300">
+            <Loader2 className="animate-spin text-blue-500 mb-4" size={32} />
+            <h2 className="text-lg font-black tracking-widest uppercase mb-1">Signal Hunting</h2>
+            <p className="text-slate-400 text-[10px] leading-relaxed mb-6">Waiting for a precise satellite lock. This may take a moment under canopy or indoors.</p>
+            <button onClick={() => setIsGpsInitializing(false)} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold text-[10px] uppercase border border-slate-700 active:scale-95 transition-all">
+              Bypass to Manual
             </button>
           </div>
         )}
 
         {gpsError && (
-          <div className="absolute inset-x-4 top-20 bg-red-900/90 border border-red-500/50 p-4 rounded-2xl z-[2000] flex flex-col items-center text-center shadow-2xl">
-            <p className="text-white font-bold mb-3 flex items-center gap-2"><Satellite size={16} /> GPS Unstable: {gpsError}</p>
-            <button onClick={startGps} className="w-full py-2 bg-white text-red-900 rounded-xl font-black text-xs uppercase">Retry High-Precision Link</button>
+          <div className="absolute inset-x-4 top-20 bg-red-900/95 border border-red-500/50 p-5 rounded-2xl z-[2001] flex flex-col items-center text-center shadow-2xl animate-in slide-in-from-top-4">
+            <AlertTriangle className="text-red-500 mb-1" size={28} />
+            <p className="text-red-100 text-xs font-black uppercase mb-3">GPS Warning: {gpsError}</p>
+            <button onClick={startGps} className="w-full py-3 bg-white text-red-900 rounded-xl font-black uppercase text-[10px]">Force GPS Probe</button>
           </div>
         )}
 
         {/* HUD Data Overlays */}
-        <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
-          {mode === 'Trk' ? (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between">
-              <div className="text-center flex-1 border-r border-slate-800">
-                <p className="text-[9px] text-slate-500 font-black uppercase">Distance</p>
-                <p className="text-2xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-[10px] ml-1">{units === 'Yards' ? 'yd' : 'm'}</span></p>
+        {!isGpsInitializing && (
+          <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
+            {mode === 'Trk' ? (
+              <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl flex justify-between animate-in slide-in-from-top duration-500">
+                <div className="text-center flex-1 border-r border-slate-800">
+                  <p className="text-[9px] text-slate-500 font-black uppercase">Dist</p>
+                  <p className="text-2xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-[10px] ml-1 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span></p>
+                </div>
+                <div className="text-center flex-1">
+                  <p className="text-[9px] text-slate-500 font-black uppercase">Elev Δ</p>
+                  <p className="text-2xl font-black text-amber-400">{toDisplayElevation(elevationChange, units)}<span className="text-[10px] ml-1 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></p>
+                </div>
               </div>
-              <div className="text-center flex-1">
-                <p className="text-[9px] text-slate-500 font-black uppercase">Elevation Δ</p>
-                <p className="text-2xl font-black text-amber-400">{toDisplayElevation(elevationChange, units)}<span className="text-[10px] ml-1">{units === 'Yards' ? 'ft' : 'm'}</span></p>
+            ) : mapMetrics && (
+              <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 animate-in zoom-in duration-300">
+                <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold uppercase">Perim</p><p className="font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold uppercase">Bunk</p><p className="font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold uppercase">Area</p><p className="font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[8px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
+                <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold uppercase">Ratio</p><p className="font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
               </div>
-            </div>
-          ) : mapMetrics && (
-            <div className="bg-slate-900/90 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
-              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">PERIMETER</p><p className="font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">BUNKER</p><p className="font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">AREA</p><p className="font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[8px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
-              <div className="bg-slate-800/60 p-1.5 rounded-lg border border-slate-700/50"><p className="text-[8px] text-slate-500 font-bold">RATIO</p><p className="font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
-            </div>
-          )}
-        </div>
-
-        {/* Sensor info Overlay */}
-        <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px]">
-          <div className="flex items-center justify-between gap-4"><span>Alt Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
-          <div className="flex items-center justify-between gap-4"><span>Alt Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `±${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
-          <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${currentPos && currentPos.accuracy < 2 ? 'bg-emerald-500 text-emerald-500' : (currentPos && currentPos.accuracy <= 5) ? 'bg-yellow-500 text-yellow-500' : 'bg-red-500 text-red-500'}`} />
-            <span className="font-bold uppercase tracking-tighter">{currentPos ? `Fused Accuracy: ±${currentPos.accuracy.toFixed(1)}m` : 'Scanning Signal...'}</span>
+            )}
           </div>
-        </div>
+        )}
 
-        <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
-          {mode === 'Trk' ? (
-            <button onClick={startNewTracking} disabled={!currentPos} className={`px-10 py-4 text-white rounded-2xl font-black shadow-xl flex items-center gap-2 transition-all ${currentPos ? 'bg-red-600 active:scale-95 shadow-red-900/40' : 'bg-slate-700 opacity-50 cursor-not-allowed'}`}>
-              <RotateCcw size={18} /> START NEW
-            </button>
-          ) : (
-            <div className="flex gap-2 w-full max-w-sm px-2">
-              <button onClick={startNewGreen} disabled={!currentPos} className="flex-1 py-4 bg-emerald-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg disabled:opacity-50 transition-all border border-emerald-500/30">New Green</button>
-              <button 
-                onTouchStart={(e) => { e.preventDefault(); toggleBunker(true); }} 
-                onTouchEnd={(e) => { e.preventDefault(); toggleBunker(false); }} 
-                onMouseDown={() => toggleBunker(true)} 
-                onMouseUp={() => toggleBunker(false)}
-                className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-300 scale-105 shadow-amber-900/40' : 'bg-slate-700 border-slate-600'}`}
-              >Bunker</button>
-              <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border border-blue-500/30">Close</button>
+        {/* Sensor Info HUD */}
+        {!isGpsInitializing && (
+          <div className="absolute bottom-28 right-4 bg-slate-900/90 p-3 rounded-2xl border border-slate-700 z-[1001] shadow-2xl text-[9px] animate-in slide-in-from-right duration-500">
+            <div className="flex items-center justify-between gap-4"><span>Sensor:</span><span className="font-black text-blue-400">{tracking.altSource}</span></div>
+            <div className="flex items-center justify-between gap-4"><span>Acc:</span><span className="font-black text-blue-400">{elevAccuracy ? `±${elevAccuracy.toFixed(1)}m` : 'N/A'}</span></div>
+            <div className="mt-2 pt-2 border-t border-slate-800 flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${currentPos && currentPos.accuracy < 3 ? 'bg-emerald-500 text-emerald-500' : (currentPos && currentPos.accuracy <= 10) ? 'bg-yellow-500 text-yellow-500' : 'bg-red-500 text-red-500'}`} />
+              <span className="font-bold uppercase tracking-tighter">{currentPos ? `GPS ±${currentPos.accuracy.toFixed(1)}m` : 'No Signal'}</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* Footer Controls */}
+        {!isGpsInitializing && (
+          <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
+            {mode === 'Trk' ? (
+              <button onClick={startNewTracking} disabled={!currentPos} className={`px-10 py-4 text-white rounded-2xl font-black shadow-xl flex items-center gap-2 transition-all ${currentPos ? 'bg-red-600 active:scale-95 shadow-red-900/40' : 'bg-slate-700 opacity-50 cursor-not-allowed'}`}>
+                <RotateCcw size={18} /> START TRACKING
+              </button>
+            ) : (
+              <div className="flex gap-2 w-full max-w-sm px-2">
+                <button onClick={startNewGreen} disabled={!currentPos} className="flex-1 py-4 bg-emerald-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg disabled:opacity-50 transition-all border border-emerald-500/30">New Green</button>
+                <button 
+                  onTouchStart={(e) => { e.preventDefault(); toggleBunker(true); }} 
+                  onTouchEnd={(e) => { e.preventDefault(); toggleBunker(false); }} 
+                  onMouseDown={() => toggleBunker(true)} 
+                  onMouseUp={() => toggleBunker(false)}
+                  className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-300 scale-105 shadow-amber-900/40' : 'bg-slate-700 border-slate-600'}`}
+                >Bunker</button>
+                <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-4 bg-blue-600 active:scale-95 rounded-2xl font-black text-xs uppercase shadow-lg transition-all border border-blue-500/30">Close</button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
