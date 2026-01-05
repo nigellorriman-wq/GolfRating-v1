@@ -5,13 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ProGolf Tracker</title>
     
-    <!-- PWA & Mobile Standalone Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="ProGolf">
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0f172a">
-    <link rel="manifest" href="/manifest.json">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
@@ -37,66 +33,58 @@
         margin: 0; padding: 0; width: 100%; height: 100%; 
         overflow: hidden; background-color: #0f172a; 
         position: fixed;
-        overscroll-behavior-y: none;
       }
       #root { width: 100%; height: 100%; position: relative; background: #0f172a; }
       
-      * {
-        -webkit-tap-highlight-color: transparent;
-        -webkit-touch-callout: none;
-        user-select: none;
-      }
-      
-      input, textarea { user-select: auto; }
-
-      /* Visual Debugger for Mobile Errors */
       #debug-console {
-        position: fixed; top: 0; left: 0; right: 0; height: auto; max-height: 50%;
-        background: rgba(180, 0, 0, 0.95); color: #ffffff; font-family: monospace;
-        font-size: 13px; z-index: 10001; overflow-y: auto;
-        border-bottom: 4px solid #ffffff; display: none; padding: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        position: fixed; top: 0; left: 0; right: 0; max-height: 80%;
+        background: #991b1b; color: white; font-family: monospace;
+        font-size: 12px; z-index: 10001; overflow-y: auto;
+        display: none; padding: 20px; border-bottom: 5px solid white;
       }
-      @keyframes spin { to { transform: rotate(360deg); } }
+
       .splash-screen {
         position: absolute; inset: 0; display: flex; flex-direction: column; 
-        align-items: center; justify-content: center; font-family: sans-serif; 
+        align-items: center; justify-content: center; 
         background: #0f172a; z-index: 9999;
         transition: opacity 0.5s ease-out;
       }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .spinner {
+        width: 30px; height: 30px; border: 3px solid #1e293b; 
+        border-top-color: #3b82f6; border-radius: 50%; 
+        animation: spin 0.8s linear infinite;
+      }
     </style>
     <script>
-      // Force hide splash after 5 seconds if React fails to mount
-      setTimeout(function() {
-        var splash = document.getElementById('splash');
-        if (splash && splash.style.display !== 'none') {
-          console.warn("ProGolf: Failsafe splash dismissal triggered.");
-          splash.style.opacity = '0';
-          setTimeout(function() { splash.style.display = 'none'; }, 500);
-        }
-      }, 5000);
-
-      window.onerror = function(msg, url, line, col, error) {
+      window.onerror = function(msg, url, line) {
         var consoleOutput = document.getElementById('debug-console');
         if (consoleOutput) {
           consoleOutput.style.display = 'block';
-          var div = document.createElement('div');
-          div.style.marginBottom = '10px';
-          div.innerHTML = '<div style="font-weight:bold; font-size: 16px; margin-bottom:5px;">⚠️ APP CRASH</div>' + 
-                          msg + '<br><small style="opacity:0.8">' + url + ':' + line + '</small>';
-          consoleOutput.appendChild(div);
+          consoleOutput.innerHTML += '<div>⚠️ RUNTIME ERROR: ' + msg + '<br><small>' + url + ':' + line + '</small></div><br>';
         }
         return false;
       };
+      
+      // Failsafe splash dismissal
+      setTimeout(function() {
+        var splash = document.getElementById('splash');
+        if (splash && splash.style.display !== 'none') {
+           console.log("ProGolf: Failsafe triggered.");
+           splash.style.opacity = '0';
+           setTimeout(function() { splash.style.display = 'none'; }, 500);
+        }
+      }, 6000);
     </script>
 </head>
-<body class="bg-slate-900 text-white">
+<body class="bg-slate-900">
     <div id="debug-console"></div>
     <div id="root">
       <div class="splash-screen" id="splash">
-        <p style="font-size: 1.5rem; font-weight: 900; color: #f8fafc; margin-bottom: 1rem; letter-spacing: 2px;">PROGOLF</p>
-        <div style="width: 32px; height: 32px; border: 4px solid #1e293b; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1.5rem;"></div>
-        <p style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2em; text-align: center;">Starting Systems...<br><span id="splash-status" style="font-size: 0.6rem; opacity: 0.6;">v2.0.4 FINAL FIX</span></p>
+        <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
+        <div class="spinner"></div>
+        <p style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">STRICT v18.3.1 BOOT</p>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>
