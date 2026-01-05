@@ -11,11 +11,11 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Loader2 } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, Loader2, Navigation, Target, Activity } from 'lucide-react';
 
 const log = (window as any).progolfLog || console.log;
 
-// Setup Leaflet icons properly
+// Leaflet Fixes
 const DefaultIcon = L.icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -29,10 +29,6 @@ const blueIcon = new L.Icon({
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
-/**
- * Component to handle map centering and dimension recalculation.
- * Using requestAnimationFrame ensures the layout is fully resolved before measuring.
- */
 const MapController: React.FC<{ 
   points: GeoPoint[], 
   currentPos: GeoPoint | null, 
@@ -41,42 +37,30 @@ const MapController: React.FC<{
 }> = ({ points, currentPos, mode, isTracking }) => {
   const map = useMap();
   
-  // Fix the "Map offset/blank area" issue
   useEffect(() => {
-    let frameId: number;
-    const updateSize = () => {
-      map.invalidateSize();
-      log("Map: invalidateSize executed via RAF.");
-    };
-    
-    // We do it immediately and then one frame later for total safety
+    const updateSize = () => map.invalidateSize();
     updateSize();
-    frameId = requestAnimationFrame(updateSize);
-    
-    return () => cancelAnimationFrame(frameId);
+    const timer = setTimeout(updateSize, 300);
+    return () => clearTimeout(timer);
   }, [map, mode]);
 
   useEffect(() => {
-    try {
-      if (mode === 'Trk') {
-        if (isTracking && points.length > 1) {
-          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-          if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
-          map.fitBounds(bounds, { padding: [40, 40], animate: true });
-        } else if (currentPos) {
-          map.setView([currentPos.lat, currentPos.lng], 19);
-        }
-      } else if (mode === 'Grn') {
-         if (points.length > 0) {
-          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-          if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
-          map.fitBounds(bounds, { padding: [30, 30], animate: true });
-        } else if (currentPos) {
-          map.setView([currentPos.lat, currentPos.lng], 21);
-        }
+    if (mode === 'Trk') {
+      if (isTracking && points.length > 1) {
+        const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+        if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
+        map.fitBounds(bounds, { padding: [50, 50], animate: true });
+      } else if (currentPos) {
+        map.setView([currentPos.lat, currentPos.lng], 19);
       }
-    } catch (e) {
-      log("MapController fitting error: " + String(e), 'WARN');
+    } else if (mode === 'Grn') {
+      if (points.length > 0) {
+        const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+        if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
+        map.fitBounds(bounds, { padding: [40, 40], animate: true });
+      } else if (currentPos) {
+        map.setView([currentPos.lat, currentPos.lng], 21);
+      }
     }
   }, [points, currentPos, mode, isTracking, map]);
 
@@ -84,10 +68,7 @@ const MapController: React.FC<{
 };
 
 const App: React.FC = () => {
-  log("App: Logic starting.");
-
   const [mode, setMode] = useState<AppMode>('Trk');
-  const [mapProvider, setMapProvider] = useState<MapProvider>('OSM');
   const [units, setUnits] = useState<UnitSystem>('Yards');
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
   const [isGpsInitializing, setIsGpsInitializing] = useState(true);
@@ -101,22 +82,19 @@ const App: React.FC = () => {
   });
 
   const watchId = useRef<number | null>(null);
-  const lastUpdateRef = useRef<number>(0);
 
   useEffect(() => {
-    log("App: Mounted successfully.");
     const splash = document.getElementById('splash');
     if (splash) {
-      splash.style.opacity = '0';
-      setTimeout(() => { splash.style.display = 'none'; }, 500);
+      setTimeout(() => {
+        splash.style.opacity = '0';
+        setTimeout(() => splash.style.display = 'none', 500);
+      }, 1000);
     }
   }, []);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
-    if (now - lastUpdateRef.current < 500) return;
-    lastUpdateRef.current = now;
-
     const newPoint: GeoPoint = {
       lat: pos.coords.latitude, 
       lng: pos.coords.longitude, 
@@ -125,17 +103,13 @@ const App: React.FC = () => {
       timestamp: now
     };
 
-    if (isGpsInitializing) {
-      log(`App: GPS ready (${pos.coords.accuracy.toFixed(1)}m accuracy)`);
-      setIsGpsInitializing(false);
-    }
-
+    if (isGpsInitializing) setIsGpsInitializing(false);
     setCurrentPos(newPoint);
 
     if (tracking.isActive) {
       setTracking(prev => {
         const lastInPath = prev.path[prev.path.length - 1];
-        if (lastInPath && calculateDistance(lastInPath, newPoint) < 0.2) return prev;
+        if (lastInPath && calculateDistance(lastInPath, newPoint) < 0.3) return prev;
         return {
           ...prev, 
           path: [...prev.path, newPoint], 
@@ -151,8 +125,7 @@ const App: React.FC = () => {
         if (!lastPoint) return { ...prev, points: [{ ...newPoint, type: 'green' }] };
         const dist = calculateDistance(lastPoint, newPoint);
         if (dist >= 0.5) {
-          const type: PointType = prev.isBunkerActive ? 'bunker' : 'green';
-          return { ...prev, points: [...prev.points, { ...newPoint, type }] };
+          return { ...prev, points: [...prev.points, { ...newPoint, type: prev.isBunkerActive ? 'bunker' : 'green' }] };
         }
         return prev;
       });
@@ -163,13 +136,11 @@ const App: React.FC = () => {
     if (navigator.geolocation) {
       watchId.current = navigator.geolocation.watchPosition(
         handlePositionUpdate, 
-        (err) => { log("App: GPS watcher error - " + err.message, 'ERROR'); },
-        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+        (err) => console.error(err),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
       );
     }
-    return () => { 
-      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
-    };
+    return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); };
   }, [handlePositionUpdate]);
 
   const totalDistance = tracking.isActive && tracking.path.length > 1
@@ -186,116 +157,150 @@ const App: React.FC = () => {
     }
     if (mapping.isClosed) totalLen += calculateDistance(mapping.points[mapping.points.length - 1], mapping.points[0]);
     const area = calculatePolygonArea(mapping.points);
-    const bunkerPct = totalLen > 0 ? Math.round((bunkerLen / totalLen) * 100) : 0;
-    return { totalLen, bunkerLen, area, bunkerPct };
+    return { totalLen, bunkerLen, area, bunkerPct: totalLen > 0 ? Math.round((bunkerLen / totalLen) * 100) : 0 };
   }, [mapping.points, mapping.isClosed]);
 
-  return (
-    <div className="flex flex-col h-full w-full bg-slate-900 text-white overflow-hidden relative">
-      <div className="h-[env(safe-area-inset-top)] w-full bg-slate-800 shrink-0"></div>
+  const startTrack = () => {
+    setTracking({
+      isActive: true,
+      startPoint: currentPos,
+      path: currentPos ? [currentPos] : [],
+      initialAltitude: currentPos?.alt || null,
+      currentAltitude: currentPos?.alt || null,
+      altSource: 'GPS'
+    });
+  };
 
-      <header className="p-3 flex items-center justify-between border-b border-slate-700 bg-slate-800/95 z-[1000] shrink-0 shadow-lg">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setMode('Trk')} className={`px-5 py-2 rounded-xl font-black text-xs transition-all ${mode === 'Trk' ? 'bg-blue-600 shadow-blue-900/40' : 'bg-slate-700 text-slate-400'}`}>TRK</button>
-          <button onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }} className={`px-5 py-2 rounded-xl font-black text-xs transition-all ${mode === 'Grn' ? 'bg-emerald-600 shadow-emerald-900/40' : 'bg-slate-700 text-slate-400'}`}>GRN</button>
+  const startMapping = () => {
+    setMapping({
+      isActive: true,
+      points: currentPos ? [{ ...currentPos, type: 'green' }] : [],
+      isBunkerActive: false,
+      isClosed: false
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#0f172a] text-white overflow-hidden select-none">
+      <div className="h-[env(safe-area-inset-top)] w-full bg-[#1e293b] shrink-0"></div>
+
+      <header className="px-4 py-3 flex items-center justify-between border-b border-slate-700/50 bg-[#1e293b]/95 backdrop-blur-xl z-[1000] shrink-0">
+        <div className="flex bg-slate-800/80 p-1 rounded-2xl border border-slate-700/50">
+          <button onClick={() => setMode('Trk')} className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>TRACK</button>
+          <button onClick={() => { setMode('Grn'); setTracking(p => ({ ...p, isActive: false })); }} className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>GREEN</button>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 text-[10px] font-black uppercase"><Ruler size={12} />{units}</button>
-        </div>
+        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-700/50 active:scale-95 transition-transform">
+          <Ruler size={16} className="text-blue-400" />
+        </button>
       </header>
 
-      <main className="flex-1 relative overflow-hidden flex flex-col bg-slate-900">
-        <div className="absolute inset-0 z-0 bg-slate-900">
+      <main className="flex-1 relative flex flex-col bg-slate-950">
+        <div className="absolute inset-0 z-0 opacity-80">
           <MapContainer center={[0,0]} zoom={3} className="w-full h-full" zoomControl={false} attributionControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
             <MapController points={mode === 'Trk' ? tracking.path : mapping.points} currentPos={currentPos} mode={mode} isTracking={tracking.isActive} />
             {currentPos && (
               <>
                 <Marker position={[currentPos.lat, currentPos.lng]} icon={blueIcon} />
-                <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.3 }} />
+                <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.15 }} />
               </>
             )}
-            {mode === 'Trk' && tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#ef4444" weight={5} />}
+            {mode === 'Trk' && tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="8, 12" />}
             {mode === 'Grn' && mapping.points.length > 1 && (
               <>
                 {mapping.points.map((p, idx) => {
                   if (idx === 0) return null;
                   const prev = mapping.points[idx - 1];
-                  return <Polyline key={`seg-${idx}`} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#fbbf24' : '#10b981'} weight={6} />;
+                  return <Polyline key={`s-${idx}`} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={5} />;
                 })}
-                {mapping.isClosed && <Polygon positions={mapping.points.map(p => [p.lat, p.lng])} pathOptions={{ color: '#10b981', weight: 2, fillColor: '#10b981', fillOpacity: 0.2 }} />}
+                {mapping.isClosed && <Polygon positions={mapping.points.map(p => [p.lat, p.lng])} pathOptions={{ color: '#10b981', weight: 1, fillColor: '#10b981', fillOpacity: 0.1 }} />}
               </>
             )}
           </MapContainer>
         </div>
 
-        <div className="relative h-full w-full pointer-events-none z-10 flex flex-col">
-          {isGpsInitializing && (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 pointer-events-auto">
-              <div className="w-64 bg-slate-900/90 backdrop-blur-xl p-8 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center text-center">
-                <Loader2 className="animate-spin text-blue-500 mb-6" size={40} />
-                <h2 className="text-xl font-black tracking-widest uppercase mb-1">GPS LINK</h2>
-                <p className="text-slate-500 text-[10px] uppercase font-bold">Waiting for Lock...</p>
-              </div>
-            </div>
-          )}
-
-          {!isGpsInitializing && (
-            <div className="p-4 pointer-events-none">
-              {mode === 'Trk' ? (
-                <div className="bg-slate-900/95 backdrop-blur-lg p-5 rounded-2xl border border-slate-700 shadow-2xl flex justify-between pointer-events-auto">
-                  <div className="text-center flex-1 border-r border-slate-800">
-                    <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Distance</p>
-                    <p className="text-4xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-xs ml-1 opacity-60 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span></p>
-                  </div>
-                  <div className="text-center flex-1">
-                    <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Elevation Δ</p>
-                    <p className="text-4xl font-black text-amber-400">{toDisplayElevation(elevationChange, units)}<span className="text-xs ml-1 opacity-60 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></p>
-                  </div>
-                </div>
-              ) : mapMetrics && (
-                <div className="bg-slate-900/95 backdrop-blur-lg p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 pointer-events-auto">
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50 text-center"><p className="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Perimeter</p><p className="text-xl font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50 text-center"><p className="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Bunker</p><p className="text-xl font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50 text-center"><p className="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Area</p><p className="text-xl font-black text-blue-400">{(mapMetrics.area * (units === 'Yards' ? 1.196 : 1)).toFixed(0)} <small className="text-[9px] uppercase">{units === 'Yards' ? 'sqyd' : 'm²'}</small></p></div>
-                  <div className="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700/50 text-center"><p className="text-[9px] text-slate-500 font-bold uppercase mb-0.5">Bunk Ratio</p><p className="text-xl font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="mt-auto p-4 pb-8 flex justify-center gap-3 pointer-events-auto">
-            {!isGpsInitializing && (
-              <>
+        <div className="relative h-full w-full pointer-events-none z-10 flex flex-col p-4 justify-between">
+          <div className="space-y-4">
+            {isGpsInitializing ? (
+               <div className="bg-slate-900/90 backdrop-blur-2xl p-6 rounded-[2rem] border border-blue-500/20 shadow-2xl flex flex-col items-center pointer-events-auto max-w-xs mx-auto mt-10">
+                 <Activity className="animate-pulse text-blue-500 mb-3" size={32} />
+                 <h2 className="text-xs font-black tracking-[0.2em] text-blue-400">GPS SEARCHING</h2>
+                 <p className="text-[10px] text-slate-500 font-bold mt-1 uppercase">Link Status: Pending</p>
+               </div>
+            ) : (
+              <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-5 rounded-3xl border border-slate-700/50 shadow-2xl pointer-events-auto">
                 {mode === 'Trk' ? (
-                  <button 
-                    onClick={() => setTracking({ isActive: true, startPoint: currentPos, path: currentPos ? [currentPos] : [], initialAltitude: currentPos?.alt || null, currentAltitude: currentPos?.alt || null, altSource: 'GPS' })} 
-                    disabled={!currentPos} 
-                    className={`px-12 py-5 text-white rounded-3xl font-black shadow-2xl flex items-center gap-4 active:scale-95 transition-all ${currentPos ? 'bg-red-600 shadow-red-900/40' : 'bg-slate-700 opacity-50'}`}
-                  >
-                    <RotateCcw size={22} className={tracking.isActive ? 'animate-spin' : ''} /> 
-                    {tracking.isActive ? 'RESTART' : 'START TRACK'}
+                  <div className="flex items-center justify-around gap-4">
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-slate-500 text-[10px] font-black uppercase mb-1 tracking-widest"><Navigation size={10} /> DISTANCE</div>
+                      <div className="text-5xl font-black glow-blue tabular-nums">{toDisplayDistance(totalDistance, units)}<span className="text-xs ml-1 font-bold opacity-40 uppercase tracking-tighter">{units === 'Yards' ? 'yd' : 'm'}</span></div>
+                    </div>
+                    <div className="h-10 w-px bg-slate-800"></div>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1 text-slate-500 text-[10px] font-black uppercase mb-1 tracking-widest"><Target size={10} /> ELEVATION</div>
+                      <div className="text-4xl font-black glow-amber tabular-nums">
+                        {elevationChange >= 0 ? '+' : ''}{toDisplayElevation(elevationChange, units)}
+                        <span className="text-xs ml-1 font-bold opacity-40 uppercase tracking-tighter">{units === 'Yards' ? 'ft' : 'm'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <MetricCard label="Perimeter" value={mapMetrics ? toDisplayDistance(mapMetrics.totalLen, units) : '--'} unit={units === 'Yards' ? 'yd' : 'm'} color="text-emerald-400" />
+                    <MetricCard label="Bunker Ratio" value={mapMetrics ? `${mapMetrics.bunkerPct}%` : '--'} unit="" color="text-amber-400" />
+                    <MetricCard label="Green Area" value={mapMetrics ? (mapMetrics.area * (units === 'Yards' ? 1.196 : 1)).toFixed(0) : '--'} unit={units === 'Yards' ? 'sqyd' : 'm²'} color="text-blue-400" />
+                    <div className="bg-slate-800/40 p-3 rounded-2xl flex items-center justify-center gap-2 border border-slate-700/30">
+                       <div className={`w-3 h-3 rounded-full ${currentPos && currentPos.accuracy < 5 ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
+                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">GPS LOCK</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="pb-12 space-y-4">
+            {!isGpsInitializing && (
+              <div className="flex flex-col items-center gap-3 pointer-events-auto">
+                {mode === 'Trk' ? (
+                  <button onClick={startTrack} className="w-full max-w-[280px] py-5 bg-blue-600 hover:bg-blue-500 rounded-[2rem] font-black text-xs tracking-[0.3em] uppercase shadow-[0_20px_40px_-15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-4 active:scale-95 transition-all">
+                    <RotateCcw size={18} className={tracking.isActive ? 'animate-spin' : ''} />
+                    {tracking.isActive ? 'RESET TRACK' : 'START TRACKING'}
                   </button>
                 ) : (
-                  <div className="flex gap-2 w-full max-w-lg">
-                    <button onClick={() => setMapping({ isActive: true, points: currentPos ? [{ ...currentPos, type: 'green' }] : [], isBunkerActive: false, isClosed: false })} className="flex-1 py-5 bg-emerald-600 rounded-2xl font-black text-xs uppercase shadow-xl active:scale-95 transition-transform">New Green</button>
+                  <div className="w-full flex flex-col gap-3">
+                    <div className="flex gap-2">
+                       <button onClick={startMapping} className="flex-1 py-5 bg-emerald-600 rounded-3xl font-black text-[10px] tracking-widest uppercase shadow-xl active:scale-95 transition-all">NEW GREEN</button>
+                       <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-5 bg-blue-600 rounded-3xl font-black text-[10px] tracking-widest uppercase shadow-xl active:scale-95 transition-all">CLOSE LOOP</button>
+                    </div>
                     <button 
                       onPointerDown={() => setMapping(p => ({ ...p, isBunkerActive: true }))} 
                       onPointerUp={() => setMapping(p => ({ ...p, isBunkerActive: false }))} 
-                      className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase shadow-xl border active:scale-95 transition-all ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-200' : 'bg-slate-700 border-slate-600'}`}
-                    >Bunker</button>
-                    <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-5 bg-blue-600 rounded-2xl font-black text-xs uppercase shadow-xl active:scale-95 transition-transform">Close</button>
+                      className={`w-full py-5 rounded-3xl font-black text-xs tracking-[0.2em] uppercase transition-all flex items-center justify-center gap-3 ${mapping.isBunkerActive ? 'bg-amber-400 text-black shadow-[0_0_30px_rgba(245,158,11,0.4)]' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${mapping.isBunkerActive ? 'bg-black animate-ping' : 'bg-slate-600'}`}></div>
+                      HOLD FOR BUNKER
+                    </button>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         </div>
       </main>
       
-      <div className="h-[env(safe-area-inset-bottom)] w-full bg-slate-900 shrink-0"></div>
+      <div className="h-[env(safe-area-inset-bottom)] w-full bg-[#0f172a] shrink-0"></div>
     </div>
   );
 };
+
+const MetricCard: React.FC<{ label: string, value: string, unit: string, color: string }> = ({ label, value, unit, color }) => (
+  <div className="bg-slate-800/40 p-3 rounded-2xl border border-slate-700/30">
+    <p className="text-[9px] text-slate-500 font-black uppercase mb-1 tracking-tighter">{label}</p>
+    <p className={`text-xl font-black ${color} tabular-nums leading-none`}>
+      {value}<span className="text-[10px] ml-1 opacity-50 lowercase">{unit}</span>
+    </p>
+  </div>
+);
 
 export default App;

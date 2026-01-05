@@ -7,19 +7,20 @@ import App from './App';
 
 const log = (window as any).progolfLog || console.log;
 
-log("index.tsx: Execution started.");
-log(`index.tsx: React Version: ${React.version}`);
+log("ProGolf: Booting React " + React.version);
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
   try {
-    log("index.tsx: Creating root...");
     const root = ReactDOM.createRoot(rootElement);
-    root.render(<App />);
-    log("index.tsx: Render invoked.");
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
   } catch (err) {
-    log("index.tsx: ERROR: " + String(err), 'ERROR');
+    log("ProGolf: Render Failed: " + String(err), 'ERROR');
   }
 } else {
-  log("index.tsx: FATAL - #root missing.", 'ERROR');
+  log("ProGolf: Critical DOM Failure - #root not found.", 'ERROR');
 }
