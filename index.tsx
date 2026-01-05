@@ -4,23 +4,23 @@ import App from './App';
 
 const log = (window as any).progolfLog || console.log;
 
-log("index.tsx: Starting entry execution.");
+log("index.tsx: Execution started.");
+log(`index.tsx: Detected React Version: ${React.version}`);
 
-const rootElement = document.getElementById('root');
-
-if (rootElement) {
-  try {
-    log("index.tsx: Creating React root (v18)...");
-    const root = ReactDOM.createRoot(rootElement);
-    
-    log("index.tsx: Invoking root.render(<App />)...");
-    root.render(<App />);
-    
-    log("index.tsx: Render call complete. Waiting for App useEffect.");
-  } catch (err) {
-    log("index.tsx: ERROR during mount: " + String(err), 'ERROR');
-    if (err instanceof Error) log(err.stack || "No stack trace", 'STACK');
-  }
+if (React.version.startsWith('19')) {
+  log("index.tsx: FATAL - React 19 is active. Aborting render to prevent crash.", 'ERROR');
 } else {
-  log("index.tsx: FATAL - #root element missing.", 'ERROR');
+  const rootElement = document.getElementById('root');
+  if (rootElement) {
+    try {
+      log("index.tsx: Creating React root...");
+      const root = ReactDOM.createRoot(rootElement);
+      log("index.tsx: Invoking render...");
+      root.render(<App />);
+    } catch (err) {
+      log("index.tsx: ERROR: " + String(err), 'ERROR');
+    }
+  } else {
+    log("index.tsx: FATAL - #root missing.", 'ERROR');
+  }
 }
