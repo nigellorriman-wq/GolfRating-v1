@@ -15,16 +15,12 @@ import { Ruler, Map as MapIcon, RotateCcw, Loader2 } from 'lucide-react';
 
 const log = (window as any).progolfLog || console.log;
 
-// Setup Leaflet icons properly for React environment
-const iconRetinaUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png';
-const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png'; // Using shadow as temp if main fails
-
+// Setup Leaflet icons properly
 const DefaultIcon = L.icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
-
 L.Marker.prototype.options.icon = DefaultIcon;
 
 const blueIcon = new L.Icon({
@@ -69,7 +65,7 @@ const MapRefresher: React.FC<{
 };
 
 const App: React.FC = () => {
-  log("App: Component function called.");
+  log("App: Component render initiated.");
 
   const [mode, setMode] = useState<AppMode>('Trk');
   const [mapProvider, setMapProvider] = useState<MapProvider>('Google');
@@ -88,18 +84,17 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
 
-  // Initialize and clean up splash
   useEffect(() => {
-    log("App: Initial useEffect triggered.");
+    log("App: Component mounted. Signaling ready.");
     (window as any).progolfAppReady = true;
     
     const splash = document.getElementById('splash');
     if (splash) {
-      log("App: Dismissing splash screen...");
+      log("App: Fading splash...");
       splash.style.opacity = '0';
       setTimeout(() => { 
         splash.style.display = 'none'; 
-        log("App: Splash screen removed from display.");
+        log("App: Splash removed.");
       }, 500);
     }
   }, []);
@@ -118,7 +113,7 @@ const App: React.FC = () => {
     };
 
     if (isGpsInitializing) {
-      log(`App: First GPS fix received! Accuracy: ${pos.coords.accuracy}m`);
+      log(`App: GPS Link Established (Acc: ${pos.coords.accuracy}m)`);
       setIsGpsInitializing(false);
     }
 
@@ -152,22 +147,20 @@ const App: React.FC = () => {
   }, [tracking.isActive, mapping.isActive, mapping.isClosed, isGpsInitializing]);
 
   useEffect(() => {
-    log("App: Setting up Geolocation watch...");
+    log("App: Initializing Geolocation Watcher...");
     if (navigator.geolocation) {
       watchId.current = navigator.geolocation.watchPosition(
         handlePositionUpdate, 
-        (err) => {
-          log("App: Geolocation Error - " + err.message, 'ERROR');
-        },
+        (err) => { log("App: Geo Error - " + err.message, 'ERROR'); },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
     } else {
-      log("App: Geolocation NOT SUPPORTED by this browser.", 'ERROR');
+      log("App: Geolocation NOT SUPPORTED", 'ERROR');
     }
     
     return () => { 
       if (watchId.current !== null) {
-        log("App: Clearing Geolocation watch.");
+        log("App: Cleanup Geo Watcher.");
         navigator.geolocation.clearWatch(watchId.current);
       }
     };
@@ -190,8 +183,6 @@ const App: React.FC = () => {
     const bunkerPct = totalLen > 0 ? Math.round((bunkerLen / totalLen) * 100) : 0;
     return { totalLen, bunkerLen, area, bunkerPct };
   }, [mapping.points, mapping.isClosed]);
-
-  log("App: Render cycle triggered.");
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 text-white overflow-hidden relative">
