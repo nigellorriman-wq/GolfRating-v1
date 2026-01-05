@@ -12,19 +12,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     
-    <script type="importmap" id="main-importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.3.1",
-        "react-dom": "https://esm.sh/react-dom@18.3.1",
-        "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-        "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-        "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
-        "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
-        "leaflet": "https://esm.sh/leaflet@1.9.4"
-      }
-    }
-    </script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
+    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
+    "leaflet": "https://esm.sh/leaflet@1.9.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
     
     <style>
       html, body { 
@@ -91,18 +93,6 @@
         el.style.display = el.style.display === 'none' ? 'block' : 'none';
       }
     </script>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
-    "leaflet": "https://esm.sh/leaflet@^1.9.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
-  }
-}
-</script>
 </head>
 <body class="bg-slate-900">
     <button class="debug-btn" onclick="toggleDebug()">DEBUG CONSOLE</button>
@@ -114,7 +104,7 @@
       <div class="splash-screen" id="splash">
         <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
         <div class="spinner"></div>
-        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">STRICT v18 BOOT...</p>
+        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">LOADING STABLE REACT...</p>
       </div>
     </div>
 
@@ -123,7 +113,7 @@
     <script>
       setTimeout(function() {
         if (!window.progolfAppReady) {
-          window.progolfLog('TIMEOUT: App failed to signal READY within 8s.', 'CRITICAL');
+          window.progolfLog('TIMEOUT: App failed to signal READY within 8s. Module graph resolution failure likely.', 'CRITICAL');
           const debugLog = document.getElementById('debug-log');
           if (debugLog) debugLog.style.display = 'block';
         }
