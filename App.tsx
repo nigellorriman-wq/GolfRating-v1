@@ -68,7 +68,7 @@ const App: React.FC = () => {
   log("App: Component render initiated.");
 
   const [mode, setMode] = useState<AppMode>('Trk');
-  const [mapProvider, setMapProvider] = useState<MapProvider>('Google');
+  const [mapProvider, setMapProvider] = useState<MapProvider>('OSM');
   const [units, setUnits] = useState<UnitSystem>('Yards');
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
   const [isGpsInitializing, setIsGpsInitializing] = useState(true);

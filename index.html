@@ -90,7 +90,7 @@
         window.progolfLog('Promise Rejection: ' + (event.reason?.message || event.reason), 'FATAL');
       });
 
-      window.progolfLog('ProGolf Initializing Environment...');
+      window.progolfLog('ProGolf System Start...');
       
       function toggleDebug() {
         const el = document.getElementById('debug-log');
@@ -108,7 +108,7 @@
       <div class="splash-screen" id="splash">
         <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
         <div class="spinner"></div>
-        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">LOADING STABLE REACT...</p>
+        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">CLEAN REACT 18 BOOT...</p>
       </div>
     </div>
 
@@ -117,7 +117,7 @@
     <script>
       setTimeout(function() {
         if (!window.progolfAppReady) {
-          window.progolfLog('TIMEOUT: App failed to signal READY within 15s. This usually indicates a problem fetching dependencies from esm.sh on a slow connection.', 'CRITICAL');
+          window.progolfLog('TIMEOUT: Browser failed to resolve module graph. This is often caused by a failed connection to esm.sh.', 'CRITICAL');
           const debugLog = document.getElementById('debug-log');
           if (debugLog) debugLog.style.display = 'block';
         }
