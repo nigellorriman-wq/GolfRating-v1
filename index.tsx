@@ -17,6 +17,8 @@ if (React.version.startsWith('19')) {
       const root = ReactDOM.createRoot(rootElement);
       log("index.tsx: Invoking render...");
       root.render(<App />);
+      // Signal ready for splash removal and monitoring
+      (window as any).progolfAppReady = true;
     } catch (err) {
       log("index.tsx: ERROR: " + String(err), 'ERROR');
     }

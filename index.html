@@ -86,13 +86,13 @@
       // VERSION GUARD: Halt if React 19 is detected anywhere in the head
       window.addEventListener('DOMContentLoaded', () => {
         const headHtml = document.head.innerHTML;
-        // Specifically look for any mention of react 19 versions
+        // Check for common React 19 injection patterns
         if (headHtml.includes('react@^19') || headHtml.includes('react@19.2')) {
           const guard = document.getElementById('v-guard');
           guard.style.display = 'flex';
           window.progolfLog('CRITICAL: React 19 reference detected in DOM. Blocking boot.', 'GUARD');
         } else {
-          window.progolfLog('Environment Check: React 18 baseline verified. No version conflicts.');
+          window.progolfLog('Environment Check: React 18 baseline verified.');
         }
       });
 
