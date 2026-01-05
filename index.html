@@ -23,8 +23,8 @@
     "react-dom": "https://esm.sh/react-dom@18.3.1",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-    "lucide-react": "https://esm.sh/lucide-react@0.446.0?external=react",
-    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?external=react,react-dom,leaflet",
+    "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
+    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
     "leaflet": "https://esm.sh/leaflet@1.9.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/"
@@ -39,7 +39,7 @@
         position: fixed;
         overscroll-behavior-y: none;
       }
-      #root { width: 100%; height: 100%; position: relative; }
+      #root { width: 100%; height: 100%; position: relative; background: #0f172a; }
       
       * {
         -webkit-tap-highlight-color: transparent;
@@ -49,20 +49,35 @@
       
       input, textarea { user-select: auto; }
 
+      /* Visual Debugger for Mobile Errors */
       #debug-console {
-        position: fixed; top: 0; left: 0; right: 0; height: auto; max-height: 200px;
-        background: rgba(0,0,0,0.95); color: #00ff00; font-family: monospace;
-        font-size: 11px; z-index: 10001; overflow-y: auto;
-        border-bottom: 2px solid #ef4444; display: none;
+        position: fixed; top: 0; left: 0; right: 0; height: auto; max-height: 40%;
+        background: rgba(20, 0, 0, 0.95); color: #ff5555; font-family: monospace;
+        font-size: 12px; z-index: 10001; overflow-y: auto;
+        border-bottom: 2px solid #ef4444; display: none; padding: 15px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       }
       @keyframes spin { to { transform: rotate(360deg); } }
       .splash-screen {
         position: absolute; inset: 0; display: flex; flex-direction: column; 
         align-items: center; justify-content: center; font-family: sans-serif; 
         background: #0f172a; z-index: 9999;
-        transition: opacity 0.4s ease-out;
+        transition: opacity 0.5s ease-out;
       }
     </style>
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        var consoleOutput = document.getElementById('debug-console');
+        if (consoleOutput) {
+          consoleOutput.style.display = 'block';
+          var div = document.createElement('div');
+          div.style.marginBottom = '10px';
+          div.innerHTML = '<b>[BOOT ERROR]</b><br>' + msg + '<br><small>' + url + ':' + line + '</small>';
+          consoleOutput.appendChild(div);
+        }
+        return false;
+      };
+    </script>
 </head>
 <body class="bg-slate-900 text-white">
     <div id="debug-console"></div>
@@ -70,21 +85,9 @@
       <div class="splash-screen" id="splash">
         <p style="font-size: 1.5rem; font-weight: 900; color: #f8fafc; margin-bottom: 1rem; letter-spacing: 2px;">PROGOLF</p>
         <div style="width: 32px; height: 32px; border: 4px solid #1e293b; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 1.5rem;"></div>
-        <p style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2em; text-align: center;">Initializing...<br><span id="splash-status" style="font-size: 0.6rem; opacity: 0.6;">v2.0.1 Standalone</span></p>
+        <p style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.2em; text-align: center;">Loading Environment...<br><span id="splash-status" style="font-size: 0.6rem; opacity: 0.6;">v2.0.3 PINNED</span></p>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      // Failsafe: if React hasn't mounted in 4 seconds, force hide splash
-      // to let user see debug logs or any rendered content.
-      setTimeout(() => {
-        const s = document.getElementById('splash');
-        if (s && s.style.display !== 'none') {
-          console.warn("ProGolf: Failsafe splash dismissal triggered.");
-          s.style.opacity = '0';
-          setTimeout(() => s.style.display = 'none', 500);
-        }
-      }, 4000);
-    </script>
 </body>
 </html>
