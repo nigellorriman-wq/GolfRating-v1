@@ -13,13 +13,15 @@ import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } fr
 import * as L from 'leaflet';
 import { Ruler, Map as MapIcon, RotateCcw, Loader2 } from 'lucide-react';
 
+const log = (window as any).progolfLog || console.log;
+
 // Setup Leaflet icons properly for React environment
 const iconRetinaUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png';
-const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png';
-const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png';
+const iconUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png'; // Using shadow as temp if main fails
 
 const DefaultIcon = L.icon({
-  iconRetinaUrl, iconUrl, shadowUrl,
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
@@ -27,12 +29,6 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 const blueIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
-
-const redIcon = new L.Icon({
-  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
   iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
@@ -46,22 +42,26 @@ const MapRefresher: React.FC<{
   const map = useMap();
   
   useEffect(() => {
-    if (mode === 'Trk') {
-      if (isTracking && points.length > 1) {
-        const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-        if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 20 });
-      } else if (currentPos) {
-        map.setView([currentPos.lat, currentPos.lng], 19);
+    try {
+      if (mode === 'Trk') {
+        if (isTracking && points.length > 1) {
+          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+          if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 20 });
+        } else if (currentPos) {
+          map.setView([currentPos.lat, currentPos.lng], 19);
+        }
+      } else if (mode === 'Grn') {
+         if (points.length > 0) {
+          const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+          if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
+          map.fitBounds(bounds, { padding: [30, 30], maxZoom: 22 });
+        } else if (currentPos) {
+          map.setView([currentPos.lat, currentPos.lng], 21);
+        }
       }
-    } else if (mode === 'Grn') {
-       if (points.length > 0) {
-        const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-        if (currentPos) bounds.extend([currentPos.lat, currentPos.lng]);
-        map.fitBounds(bounds, { padding: [30, 30], maxZoom: 22 });
-      } else if (currentPos) {
-        map.setView([currentPos.lat, currentPos.lng], 21);
-      }
+    } catch (e) {
+      log("MapRefresher Error: " + String(e), 'WARN');
     }
   }, [points, currentPos, mode, isTracking, map]);
 
@@ -69,6 +69,8 @@ const MapRefresher: React.FC<{
 };
 
 const App: React.FC = () => {
+  log("App: Component function called.");
+
   const [mode, setMode] = useState<AppMode>('Trk');
   const [mapProvider, setMapProvider] = useState<MapProvider>('Google');
   const [units, setUnits] = useState<UnitSystem>('Yards');
@@ -86,12 +88,19 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
 
-  // Dismiss splash when the app is ready
+  // Initialize and clean up splash
   useEffect(() => {
+    log("App: Initial useEffect triggered.");
+    (window as any).progolfAppReady = true;
+    
     const splash = document.getElementById('splash');
     if (splash) {
+      log("App: Dismissing splash screen...");
       splash.style.opacity = '0';
-      setTimeout(() => { splash.style.display = 'none'; }, 500);
+      setTimeout(() => { 
+        splash.style.display = 'none'; 
+        log("App: Splash screen removed from display.");
+      }, 500);
     }
   }, []);
 
@@ -108,8 +117,12 @@ const App: React.FC = () => {
       timestamp: now
     };
 
+    if (isGpsInitializing) {
+      log(`App: First GPS fix received! Accuracy: ${pos.coords.accuracy}m`);
+      setIsGpsInitializing(false);
+    }
+
     setCurrentPos(newPoint);
-    setIsGpsInitializing(false);
 
     if (tracking.isActive) {
       setTracking(prev => {
@@ -136,17 +149,28 @@ const App: React.FC = () => {
         return prev;
       });
     }
-  }, [tracking.isActive, mapping.isActive, mapping.isClosed]);
+  }, [tracking.isActive, mapping.isActive, mapping.isClosed, isGpsInitializing]);
 
   useEffect(() => {
+    log("App: Setting up Geolocation watch...");
     if (navigator.geolocation) {
       watchId.current = navigator.geolocation.watchPosition(
         handlePositionUpdate, 
-        (err) => console.warn("GPS Error", err),
+        (err) => {
+          log("App: Geolocation Error - " + err.message, 'ERROR');
+        },
         { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
       );
+    } else {
+      log("App: Geolocation NOT SUPPORTED by this browser.", 'ERROR');
     }
-    return () => { if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current); };
+    
+    return () => { 
+      if (watchId.current !== null) {
+        log("App: Clearing Geolocation watch.");
+        navigator.geolocation.clearWatch(watchId.current);
+      }
+    };
   }, [handlePositionUpdate]);
 
   const totalDistance = tracking.isActive && tracking.path.length > 1
@@ -166,6 +190,8 @@ const App: React.FC = () => {
     const bunkerPct = totalLen > 0 ? Math.round((bunkerLen / totalLen) * 100) : 0;
     return { totalLen, bunkerLen, area, bunkerPct };
   }, [mapping.points, mapping.isClosed]);
+
+  log("App: Render cycle triggered.");
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 text-white overflow-hidden relative">

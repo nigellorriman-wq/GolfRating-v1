@@ -2,24 +2,25 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-console.log("ProGolf: Entry point loaded. Attempting mount...");
+// Access the global logger defined in index.html
+const log = (window as any).progolfLog || console.log;
+
+log("index.tsx: Execution started.");
 
 const rootElement = document.getElementById('root');
 
 if (rootElement) {
   try {
+    log("index.tsx: Creating React root...");
     const root = ReactDOM.createRoot(rootElement);
-    // No StrictMode to ensure Leaflet initializes exactly once
+    
+    log("index.tsx: Rendering App component...");
     root.render(<App />);
-    console.log("ProGolf: Render command sent to React.");
+    
+    log("index.tsx: Render called successfully.");
   } catch (err) {
-    console.error("ProGolf: Initial mount failed", err);
-    const debug = document.getElementById('debug-console');
-    if (debug) {
-      debug.style.display = 'block';
-      debug.innerHTML += '<div style="background:black; padding:10px;">MOUNT ERROR: ' + String(err) + '</div>';
-    }
+    log("index.tsx: ERROR during mount: " + String(err), 'ERROR');
   }
 } else {
-  console.error("ProGolf: DOM Root element not found.");
+  log("index.tsx: FATAL - #root element not found in DOM.", 'ERROR');
 }

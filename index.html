@@ -33,14 +33,16 @@
         margin: 0; padding: 0; width: 100%; height: 100%; 
         overflow: hidden; background-color: #0f172a; 
         position: fixed;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      #root { width: 100%; height: 100%; position: relative; background: #0f172a; }
+      #root { width: 100%; height: 100%; position: relative; background: #0f172a; z-index: 1; }
       
-      #debug-console {
-        position: fixed; top: 0; left: 0; right: 0; max-height: 80%;
-        background: #991b1b; color: white; font-family: monospace;
-        font-size: 12px; z-index: 10001; overflow-y: auto;
-        display: none; padding: 20px; border-bottom: 5px solid white;
+      #debug-log {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: #000; color: #0f0; font-family: monospace;
+        font-size: 11px; z-index: 10000; overflow-y: auto;
+        padding: 15px; display: none; pointer-events: none;
+        opacity: 0.8;
       }
 
       .splash-screen {
@@ -56,37 +58,63 @@
         border-top-color: #3b82f6; border-radius: 50%; 
         animation: spin 0.8s linear infinite;
       }
+      
+      .debug-btn {
+        position: fixed; top: 10px; right: 10px; z-index: 10001;
+        background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #444;
+        padding: 4px 8px; border-radius: 4px; font-size: 10px;
+      }
     </style>
     <script>
-      window.onerror = function(msg, url, line) {
-        var consoleOutput = document.getElementById('debug-console');
-        if (consoleOutput) {
-          consoleOutput.style.display = 'block';
-          consoleOutput.innerHTML += '<div>⚠️ RUNTIME ERROR: ' + msg + '<br><small>' + url + ':' + line + '</small></div><br>';
+      window.logHistory = [];
+      window.progolfLog = function(msg, type = 'INFO') {
+        const entry = '[' + new Date().toLocaleTimeString() + '] ' + type + ': ' + msg;
+        window.logHistory.push(entry);
+        console.log(entry);
+        const logEl = document.getElementById('debug-log');
+        if (logEl) {
+          logEl.innerHTML += '<div>' + entry + '</div>';
+          logEl.scrollTop = logEl.scrollHeight;
         }
+      };
+
+      window.onerror = function(msg, url, line) {
+        window.progolfLog(msg + ' (at ' + url + ':' + line + ')', 'ERROR');
+        const logEl = document.getElementById('debug-log');
+        if (logEl) logEl.style.display = 'block';
         return false;
       };
+
+      window.progolfLog('HTML Header parsed. Waiting for module load...');
       
-      // Failsafe splash dismissal
-      setTimeout(function() {
-        var splash = document.getElementById('splash');
-        if (splash && splash.style.display !== 'none') {
-           console.log("ProGolf: Failsafe triggered.");
-           splash.style.opacity = '0';
-           setTimeout(function() { splash.style.display = 'none'; }, 500);
-        }
-      }, 6000);
+      function toggleDebug() {
+        const el = document.getElementById('debug-log');
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        el.style.pointerEvents = el.style.display === 'none' ? 'none' : 'auto';
+      }
     </script>
 </head>
 <body class="bg-slate-900">
-    <div id="debug-console"></div>
+    <button class="debug-btn" onclick="toggleDebug()">DEBUG</button>
+    <div id="debug-log"></div>
     <div id="root">
       <div class="splash-screen" id="splash">
         <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
         <div class="spinner"></div>
-        <p style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">STRICT v18.3.1 BOOT</p>
+        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">BOOTING SYSTEM...</p>
       </div>
     </div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Failsafe: if the app hasn't signaled ready in 8 seconds, show the log
+      setTimeout(function() {
+        if (!window.progolfAppReady) {
+          window.progolfLog('App failed to signal ready within 8 seconds.', 'TIMEOUT');
+          document.getElementById('debug-log').style.display = 'block';
+          document.getElementById('boot-status').innerText = 'CRITICAL TIMEOUT';
+          document.getElementById('boot-status').style.color = '#ef4444';
+        }
+      }, 8000);
+    </script>
 </body>
 </html>
