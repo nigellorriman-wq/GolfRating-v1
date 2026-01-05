@@ -11,9 +11,10 @@ import {
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, AlertTriangle, Loader2, Zap } from 'lucide-react';
+import { Ruler, Map as MapIcon, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
 
-console.info("ProGolf: App component module loaded.");
+// Signal to the Boot Guardian that React has loaded the module
+(window as any).PROGOLF_BOOTED = true;
 
 // Standard Leaflet Icon Fix
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -68,16 +69,12 @@ const MapRefresher: React.FC<{
 };
 
 const App: React.FC = () => {
-  console.info("ProGolf: App component rendering...");
-  
   const [mode, setMode] = useState<AppMode>('Trk');
   const [mapProvider, setMapProvider] = useState<MapProvider>('Google');
   const [units, setUnits] = useState<UnitSystem>('Yards');
-  const [elevAccuracy, setElevAccuracy] = useState<number | null>(null);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [currentPos, setCurrentPos] = useState<GeoPoint | null>(null);
   const [isGpsInitializing, setIsGpsInitializing] = useState(true);
-  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
 
   const [tracking, setTracking] = useState<TrackingState>({
     isActive: false,
@@ -99,42 +96,14 @@ const App: React.FC = () => {
   const lastUpdateRef = useRef<number>(0);
   const wakeLockRef = useRef<any>(null);
 
+  // Dismiss splash when component successfully mounts
   useEffect(() => {
     const splash = document.getElementById('splash');
     if (splash) {
       splash.style.opacity = '0';
       setTimeout(() => { splash.style.display = 'none'; }, 600);
     }
-    console.info("ProGolf: Splash dismissed from App component.");
   }, []);
-
-  const requestWakeLock = async () => {
-    if ('wakeLock' in navigator) {
-      try {
-        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-        setIsWakeLockActive(true);
-        wakeLockRef.current.addEventListener('release', () => { setIsWakeLockActive(false); });
-      } catch (err) {
-        console.warn('ProGolf: Wake Lock failed', err);
-      }
-    }
-  };
-
-  const releaseWakeLock = () => {
-    if (wakeLockRef.current) {
-      wakeLockRef.current.release();
-      wakeLockRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    if (tracking.isActive || (mapping.isActive && !mapping.isClosed)) {
-      requestWakeLock();
-    } else {
-      releaseWakeLock();
-    }
-    return () => releaseWakeLock();
-  }, [tracking.isActive, mapping.isActive, mapping.isClosed]);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
     const now = Date.now();
@@ -185,10 +154,8 @@ const App: React.FC = () => {
       setGpsError("Geolocation unavailable.");
       return;
     }
-    
     setGpsError(null);
     if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
-    
     watchId.current = navigator.geolocation.watchPosition(
       handlePositionUpdate,
       (err) => { setGpsError(err.message || "Signal Lost"); },
@@ -238,95 +205,99 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col bg-slate-900">
-        <MapContainer 
-          center={[0,0]} 
-          zoom={3} 
-          className="w-full h-full absolute inset-0 z-0" 
-          zoomControl={false} 
-          attributionControl={false}
-          style={{ background: '#0f172a' }}
-        >
-          {mapProvider === 'OSM' ? (
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
-          ) : (
-            <TileLayer url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" maxZoom={22} />
-          )}
-          <MapRefresher points={mode === 'Trk' ? tracking.path : mapping.points} currentPos={currentPos} mode={mode} isTracking={tracking.isActive} />
-          {currentPos && (
-            <>
-              <Marker position={[currentPos.lat, currentPos.lng]} icon={blueIcon} />
-              <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.3 }} />
-            </>
-          )}
-          {mode === 'Trk' && (
-            <>
-              {tracking.startPoint && <Marker position={[tracking.startPoint.lat, tracking.startPoint.lng]} icon={redIcon} />}
-              {tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#ef4444" weight={5} />}
-            </>
-          )}
-          {mode === 'Grn' && mapping.points.length > 1 && (
-            <>
-              {mapping.points.map((p, idx) => {
-                if (idx === 0) return null;
-                const prev = mapping.points[idx - 1];
-                return <Polyline key={`seg-${idx}`} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#fbbf24' : '#10b981'} weight={6} />;
-              })}
-              {mapping.isClosed && <Polygon positions={mapping.points.map(p => [p.lat, p.lng])} pathOptions={{ color: '#10b981', weight: 2, fillColor: '#10b981', fillOpacity: 0.2 }} />}
-            </>
-          )}
-        </MapContainer>
-
-        {isGpsInitializing && !gpsError && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 bg-slate-900/95 backdrop-blur-lg p-8 rounded-3xl border border-slate-700 shadow-2xl z-[2000] flex flex-col items-center text-center">
-            <Loader2 className="animate-spin text-blue-500 mb-6" size={40} />
-            <h2 className="text-xl font-black tracking-widest uppercase mb-2">GPS Link</h2>
-            <p className="text-slate-400 text-[10px] leading-relaxed">Connecting to satellites...</p>
-          </div>
-        )}
-
-        {!isGpsInitializing && (
-          <div className="absolute top-4 left-4 right-4 pointer-events-none z-[1001]">
-            {mode === 'Trk' ? (
-              <div className="bg-slate-900/95 backdrop-blur p-4 rounded-2xl border border-slate-700 shadow-2xl flex justify-between">
-                <div className="text-center flex-1 border-r border-slate-800">
-                  <p className="text-[10px] text-slate-500 font-black uppercase">Dist</p>
-                  <p className="text-3xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-xs ml-1 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span></p>
-                </div>
-                <div className="text-center flex-1">
-                  <p className="text-[10px] text-slate-500 font-black uppercase">Elev Δ</p>
-                  <p className="text-3xl font-black text-amber-400">{toDisplayElevation(elevationChange, units)}<span className="text-xs ml-1 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></p>
-                </div>
-              </div>
-            ) : mapMetrics && (
-              <div className="bg-slate-900/95 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2">
-                <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Perim</p><p className="text-xl font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Bunk</p><p className="text-xl font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Area</p><p className="text-xl font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[9px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
-                <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Ratio</p><p className="text-xl font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {!isGpsInitializing && (
-          <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 z-[1001]">
-            {mode === 'Trk' ? (
-              <button onClick={() => setTracking(prev => ({ ...prev, isActive: true, startPoint: currentPos, path: currentPos ? [currentPos] : [], initialAltitude: currentPos?.alt || null, currentAltitude: currentPos?.alt || null }))} disabled={!currentPos} className={`px-10 py-5 text-white rounded-2xl font-black shadow-2xl flex items-center gap-3 transition-all ${currentPos ? 'bg-red-600' : 'bg-slate-700 opacity-50'}`}>
-                <RotateCcw size={20} /> START TRACKING
-              </button>
+        <div className="absolute inset-0 z-0">
+          <MapContainer 
+            center={[0,0]} 
+            zoom={3} 
+            className="w-full h-full" 
+            zoomControl={false} 
+            attributionControl={false}
+            style={{ background: '#0f172a' }}
+          >
+            {mapProvider === 'OSM' ? (
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
             ) : (
-              <div className="flex gap-2 w-full max-w-md">
-                <button onClick={() => setMapping({ isActive: true, points: currentPos ? [{ ...currentPos, type: 'green' }] : [], isBunkerActive: false, isClosed: false })} className="flex-1 py-5 bg-emerald-600 rounded-2xl font-black text-xs uppercase shadow-xl">New Green</button>
-                <button 
-                  onPointerDown={() => setMapping(p => ({ ...p, isBunkerActive: true }))}
-                  onPointerUp={() => setMapping(p => ({ ...p, isBunkerActive: false }))}
-                  className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase shadow-xl border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-200' : 'bg-slate-700 border-slate-600'}`}
-                >Bunker</button>
-                <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-5 bg-blue-600 rounded-2xl font-black text-xs uppercase shadow-xl">Close</button>
-              </div>
+              <TileLayer url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}" maxZoom={22} />
             )}
-          </div>
-        )}
+            <MapRefresher points={mode === 'Trk' ? tracking.path : mapping.points} currentPos={currentPos} mode={mode} isTracking={tracking.isActive} />
+            {currentPos && (
+              <>
+                <Marker position={[currentPos.lat, currentPos.lng]} icon={blueIcon} />
+                <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.3 }} />
+              </>
+            )}
+            {mode === 'Trk' && (
+              <>
+                {tracking.startPoint && <Marker position={[tracking.startPoint.lat, tracking.startPoint.lng]} icon={redIcon} />}
+                {tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#ef4444" weight={5} />}
+              </>
+            )}
+            {mode === 'Grn' && mapping.points.length > 1 && (
+              <>
+                {mapping.points.map((p, idx) => {
+                  if (idx === 0) return null;
+                  const prev = mapping.points[idx - 1];
+                  return <Polyline key={`seg-${idx}`} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#fbbf24' : '#10b981'} weight={6} />;
+                })}
+                {mapping.isClosed && <Polygon positions={mapping.points.map(p => [p.lat, p.lng])} pathOptions={{ color: '#10b981', weight: 2, fillColor: '#10b981', fillOpacity: 0.2 }} />}
+              </>
+            )}
+          </MapContainer>
+        </div>
+
+        <div className="relative h-full w-full pointer-events-none z-10">
+          {isGpsInitializing && !gpsError && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 bg-slate-900/95 backdrop-blur-lg p-8 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center text-center pointer-events-auto">
+              <Loader2 className="animate-spin text-blue-500 mb-6" size={40} />
+              <h2 className="text-xl font-black tracking-widest uppercase mb-2">GPS Link</h2>
+              <p className="text-slate-400 text-[10px] leading-relaxed">Securing Satellite Lock...</p>
+            </div>
+          )}
+
+          {!isGpsInitializing && (
+            <div className="absolute top-4 left-4 right-4 pointer-events-none">
+              {mode === 'Trk' ? (
+                <div className="bg-slate-900/95 backdrop-blur p-4 rounded-2xl border border-slate-700 shadow-2xl flex justify-between pointer-events-auto">
+                  <div className="text-center flex-1 border-r border-slate-800">
+                    <p className="text-[10px] text-slate-500 font-black uppercase">Dist</p>
+                    <p className="text-3xl font-black text-blue-400">{toDisplayDistance(totalDistance, units)}<span className="text-xs ml-1 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span></p>
+                  </div>
+                  <div className="text-center flex-1">
+                    <p className="text-[10px] text-slate-500 font-black uppercase">Elev Δ</p>
+                    <p className="text-3xl font-black text-amber-400">{toDisplayElevation(elevationChange, units)}<span className="text-xs ml-1 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></p>
+                  </div>
+                </div>
+              ) : mapMetrics && (
+                <div className="bg-slate-900/95 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 pointer-events-auto">
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Perim</p><p className="text-xl font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Bunk</p><p className="text-xl font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Area</p><p className="text-xl font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[9px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Ratio</p><p className="text-xl font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isGpsInitializing && (
+            <div className="absolute bottom-8 left-4 right-4 flex justify-center gap-3 pointer-events-auto">
+              {mode === 'Trk' ? (
+                <button onClick={() => setTracking(prev => ({ ...prev, isActive: true, startPoint: currentPos, path: currentPos ? [currentPos] : [], initialAltitude: currentPos?.alt || null, currentAltitude: currentPos?.alt || null }))} disabled={!currentPos} className={`px-10 py-5 text-white rounded-2xl font-black shadow-2xl flex items-center gap-3 transition-all ${currentPos ? 'bg-red-600' : 'bg-slate-700 opacity-50'}`}>
+                  <RotateCcw size={20} /> START TRACKING
+                </button>
+              ) : (
+                <div className="flex gap-2 w-full max-w-md">
+                  <button onClick={() => setMapping({ isActive: true, points: currentPos ? [{ ...currentPos, type: 'green' }] : [], isBunkerActive: false, isClosed: false })} className="flex-1 py-5 bg-emerald-600 rounded-2xl font-black text-xs uppercase shadow-xl">New Green</button>
+                  <button 
+                    onPointerDown={() => setMapping(p => ({ ...p, isBunkerActive: true }))}
+                    onPointerUp={() => setMapping(p => ({ ...p, isBunkerActive: false }))}
+                    className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase shadow-xl border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-200' : 'bg-slate-700 border-slate-600'}`}
+                  >Bunker</button>
+                  <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-5 bg-blue-600 rounded-2xl font-black text-xs uppercase shadow-xl">Close</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </main>
       
       <div className="h-[env(safe-area-inset-bottom)] w-full bg-slate-900 shrink-0"></div>
