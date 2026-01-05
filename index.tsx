@@ -10,10 +10,6 @@ log(`index.tsx: Detected React Version: ${React.version}`);
 const rootElement = document.getElementById('root');
 if (rootElement) {
   try {
-    if (React.version.startsWith('19')) {
-       log("index.tsx: WARNING - React 19 detected despite cleanup. Attempting compatible render.", 'WARN');
-    }
-    
     log("index.tsx: Creating React root...");
     const root = ReactDOM.createRoot(rootElement);
     log("index.tsx: Invoking render...");
@@ -21,8 +17,8 @@ if (rootElement) {
     // Signal ready for splash removal and monitoring
     (window as any).progolfAppReady = true;
   } catch (err) {
-    log("index.tsx: ERROR: " + String(err), 'ERROR');
+    log("index.tsx: ERROR during render: " + String(err), 'ERROR');
   }
 } else {
-  log("index.tsx: FATAL - #root missing.", 'ERROR');
+  log("index.tsx: FATAL - #root missing from DOM.", 'ERROR');
 }
