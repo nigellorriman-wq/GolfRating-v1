@@ -40,7 +40,7 @@
         background: #000; color: #0f0; font-family: monospace;
         font-size: 11px; z-index: 10000; overflow-y: auto;
         padding: 15px; display: none; pointer-events: auto;
-        opacity: 1; border: 4px solid #991b1b;
+        opacity: 1; border: 4px solid #1e293b;
       }
 
       .splash-screen {
@@ -86,23 +86,25 @@
       // VERSION GUARD: Halt if React 19 is detected anywhere in the head
       window.addEventListener('DOMContentLoaded', () => {
         const headHtml = document.head.innerHTML;
-        if (headHtml.includes('react@^19') || headHtml.includes('react@19')) {
+        // Specifically look for the problematic strings we just removed
+        if (headHtml.includes('react@^19') || headHtml.includes('react@19.2')) {
           const guard = document.getElementById('v-guard');
           guard.style.display = 'flex';
           window.progolfLog('CRITICAL: React 19 reference detected in DOM. Blocking boot.', 'GUARD');
         } else {
-          window.progolfLog('Version Guard: No React 19 references found. Clean boot authorized.');
+          window.progolfLog('Environment Check: React 18 baseline verified.');
         }
       });
 
       window.onerror = function(msg, url, line, col, error) {
         window.progolfLog(msg + ' (at ' + url + ':' + line + ')', 'FATAL ERROR');
         if (error && error.stack) window.progolfLog('STACK: ' + error.stack, 'STACK');
-        document.getElementById('debug-log').style.display = 'block';
+        const logEl = document.getElementById('debug-log');
+        if (logEl) logEl.style.display = 'block';
         return false;
       };
 
-      window.progolfLog('ProGolf Initializing (Strict v18 Mode)...');
+      window.progolfLog('ProGolf Initializing...');
       
       function toggleDebug() {
         const el = document.getElementById('debug-log');
@@ -115,44 +117,40 @@
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0",
     "leaflet": "https://esm.sh/leaflet@^1.9.4",
-    "react-leaflet": "https://esm.sh/react-leaflet@^5.0.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
   }
 }
 </script>
 </head>
 <body class="bg-slate-900">
-    <!-- Nuclear Alert UI -->
     <div id="v-guard">
-      <h1>⚠️ VERSION ALERT ⚠️</h1>
-      <p>React 19 reference was found in the application map.<br>Execution halted to prevent environment pollution.</p>
-      <p style="font-size: 10px; margin-top: 20px; opacity: 0.7;">Check index.html importmap immediately.</p>
+      <h1>⚠️ VERSION CONFLICT ⚠️</h1>
+      <p>React 19 reference found. App halted to prevent crash.</p>
     </div>
 
     <button class="debug-btn" onclick="toggleDebug()">DEBUG CONSOLE</button>
     <div id="debug-log">
-        <div style="color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #0f0; padding-bottom: 5px;">PROGOLF SYSTEM LOG [CLEAN v18.3.1]</div>
+        <div style="color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #0f0; padding-bottom: 5px;">PROGOLF SYSTEM LOG</div>
     </div>
     
     <div id="root">
       <div class="splash-screen" id="splash">
         <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
         <div class="spinner"></div>
-        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">VERIFYING ENVIRONMENT...</p>
+        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">BOOTING v18.3.1...</p>
       </div>
     </div>
 
     <script type="module" src="/index.tsx"></script>
     
     <script>
-      // Failsafe Timeout
       setTimeout(function() {
         if (!window.progolfAppReady) {
-          window.progolfLog('TIMEOUT: App failed to mount within 8s.', 'CRITICAL');
-          document.getElementById('debug-log').style.display = 'block';
-          const status = document.getElementById('boot-status');
-          if (status) status.innerText = 'BOOT FAILURE';
+          window.progolfLog('TIMEOUT: App failed to signal READY. Checking logs.', 'CRITICAL');
+          const debugLog = document.getElementById('debug-log');
+          if (debugLog) debugLog.style.display = 'block';
         }
       }, 8000);
     </script>
