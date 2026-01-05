@@ -66,10 +66,8 @@
       }
     </style>
     <script>
-      window.logHistory = [];
       window.progolfLog = function(msg, type = 'INFO') {
         const entry = '[' + new Date().toLocaleTimeString() + '] ' + type + ': ' + msg;
-        window.logHistory.push(entry);
         console.log(entry);
         const logEl = document.getElementById('debug-log');
         if (logEl) {
@@ -80,17 +78,12 @@
 
       window.onerror = function(msg, url, line, col, error) {
         window.progolfLog(msg + ' (at ' + url + ':' + line + ')', 'FATAL ERROR');
-        if (error && error.stack) window.progolfLog('STACK: ' + error.stack, 'STACK');
         const logEl = document.getElementById('debug-log');
         if (logEl) logEl.style.display = 'block';
         return false;
       };
 
-      window.addEventListener('unhandledrejection', function(event) {
-        window.progolfLog('Promise Rejection: ' + (event.reason?.message || event.reason), 'FATAL');
-      });
-
-      window.progolfLog('ProGolf System Start...');
+      window.progolfLog('ProGolf Clean Boot Sequence Start...');
       
       function toggleDebug() {
         const el = document.getElementById('debug-log');
@@ -99,16 +92,16 @@
     </script>
 </head>
 <body class="bg-slate-900">
-    <button class="debug-btn" onclick="toggleDebug()">DEBUG CONSOLE</button>
+    <button class="debug-btn" onclick="toggleDebug()">DEBUG</button>
     <div id="debug-log">
-        <div style="color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #0f0; padding-bottom: 5px;">PROGOLF SYSTEM LOG</div>
+        <div style="color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #0f0; padding-bottom: 5px;">STRICT REACT 18 ENVIRONMENT</div>
     </div>
     
     <div id="root">
       <div class="splash-screen" id="splash">
         <h1 style="color:white; font-weight:900; letter-spacing:3px; margin-bottom:20px;">PROGOLF</h1>
         <div class="spinner"></div>
-        <p id="boot-status" style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">CLEAN REACT 18 BOOT...</p>
+        <p style="color: #475569; font-size: 10px; margin-top: 20px; font-family: monospace;">STABLE INITIALIZATION...</p>
       </div>
     </div>
 
@@ -117,9 +110,8 @@
     <script>
       setTimeout(function() {
         if (!window.progolfAppReady) {
-          window.progolfLog('TIMEOUT: Browser failed to resolve module graph. This is often caused by a failed connection to esm.sh.', 'CRITICAL');
-          const debugLog = document.getElementById('debug-log');
-          if (debugLog) debugLog.style.display = 'block';
+          window.progolfLog('CRITICAL: App failed to signal ready. This is likely due to the browser failing to resolve the strictly clean import map.', 'FATAL');
+          document.getElementById('debug-log').style.display = 'block';
         }
       }, 15000);
     </script>
