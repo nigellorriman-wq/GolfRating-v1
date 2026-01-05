@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   AppMode, 
-  MapProvider, 
   UnitSystem, 
   GeoPoint, 
   TrackingState, 
-  MappingState,
-  PointType
-} from './types';
-import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
+  MappingState
+} from './types.ts';
+import { 
+  calculateDistance, 
+  toDisplayDistance, 
+  toDisplayElevation, 
+  calculatePolygonArea, 
+  getAccuracyColor 
+} from './utils/geoUtils.ts';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, Loader2, Navigation, Target, Activity } from 'lucide-react';
-
-const log = (window as any).progolfLog || console.log;
+import { Ruler, RotateCcw, Navigation, Target, Activity } from 'lucide-react';
 
 // Leaflet Fixes
 const DefaultIcon = L.icon({

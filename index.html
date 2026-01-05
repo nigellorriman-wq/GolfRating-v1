@@ -5,27 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ProGolf Tracker</title>
     
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react/jsx-dev-runtime": "https://esm.sh/react@18.3.1/jsx-dev-runtime",
+    "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
+    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
+    "leaflet": "https://esm.sh/leaflet@1.9.4"
+
+
+  }
+}
+</script>
+
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    
-    <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom": "https://esm.sh/react-dom@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-    "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
-    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
-    "leaflet": "https://esm.sh/leaflet@1.9.4"
-
-  }
-}
-</script>
     
     <style>
       html, body { 
@@ -57,7 +59,6 @@
         background: #0f172a !important;
       }
 
-      /* Glow Effects */
       .glow-blue { text-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
       .glow-amber { text-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
       .glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
@@ -74,6 +75,6 @@
         <p style="color: #64748b; font-size: 11px; margin-top: 24px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Initializing Systems</p>
       </div>
     </div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="module" src="index.tsx"></script>
 </body>
 </html>
