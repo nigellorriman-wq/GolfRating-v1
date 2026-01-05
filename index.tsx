@@ -14,10 +14,11 @@ if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
     log("index.tsx: Invoking render...");
     root.render(<App />);
-    // Signal ready for splash removal and monitoring
+    // Signal ready so the timeout monitor knows JS executed successfully
     (window as any).progolfAppReady = true;
+    log("index.tsx: Signal READY sent.");
   } catch (err) {
-    log("index.tsx: ERROR during render: " + String(err), 'ERROR');
+    log("index.tsx: ERROR during initial render call: " + String(err), 'ERROR');
   }
 } else {
   log("index.tsx: FATAL - #root missing from DOM.", 'ERROR');
