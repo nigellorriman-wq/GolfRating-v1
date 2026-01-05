@@ -62,13 +62,6 @@
         background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #444;
         padding: 4px 8px; border-radius: 4px; font-size: 10px;
       }
-      
-      #v-guard {
-        position: fixed; inset: 0; background: #991b1b; color: white;
-        z-index: 20000; display: none; flex-direction: column;
-        align-items: center; justify-content: center; text-align: center;
-        padding: 20px; font-weight: bold;
-      }
     </style>
     <script>
       window.logHistory = [];
@@ -83,19 +76,6 @@
         }
       };
 
-      // VERSION GUARD: Halt if React 19 is detected anywhere in the head
-      window.addEventListener('DOMContentLoaded', () => {
-        const headHtml = document.head.innerHTML;
-        // Check for common React 19 injection patterns
-        if (headHtml.includes('react@^19') || headHtml.includes('react@19.2')) {
-          const guard = document.getElementById('v-guard');
-          guard.style.display = 'flex';
-          window.progolfLog('CRITICAL: React 19 reference detected in DOM. Blocking boot.', 'GUARD');
-        } else {
-          window.progolfLog('Environment Check: React 18 baseline verified.');
-        }
-      });
-
       window.onerror = function(msg, url, line, col, error) {
         window.progolfLog(msg + ' (at ' + url + ':' + line + ')', 'FATAL ERROR');
         if (error && error.stack) window.progolfLog('STACK: ' + error.stack, 'STACK');
@@ -104,7 +84,7 @@
         return false;
       };
 
-      window.progolfLog('ProGolf Initializing...');
+      window.progolfLog('ProGolf Initializing Environment...');
       
       function toggleDebug() {
         const el = document.getElementById('debug-log');
@@ -125,11 +105,6 @@
 </script>
 </head>
 <body class="bg-slate-900">
-    <div id="v-guard">
-      <h1>⚠️ VERSION CONFLICT ⚠️</h1>
-      <p>React 19 reference found in source.<br>Application execution halted to prevent environment pollution.</p>
-    </div>
-
     <button class="debug-btn" onclick="toggleDebug()">DEBUG CONSOLE</button>
     <div id="debug-log">
         <div style="color: #fff; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #0f0; padding-bottom: 5px;">PROGOLF SYSTEM LOG</div>
