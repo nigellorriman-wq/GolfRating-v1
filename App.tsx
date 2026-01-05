@@ -10,15 +10,16 @@ import {
 } from './types';
 import { calculateDistance, toDisplayDistance, toDisplayElevation, calculatePolygonArea, getAccuracyColor } from './utils/geoUtils';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
-import L from 'leaflet';
-import { Ruler, Map as MapIcon, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import * as L from 'leaflet';
+import { Ruler, Map as MapIcon, RotateCcw, Loader2 } from 'lucide-react';
 
-// Signal to the Boot Guardian that React has loaded the module
+// SET BOOT SIGNAL IMMEDIATELY
 (window as any).PROGOLF_BOOTED = true;
 
-// Standard Leaflet Icon Fix
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
+// Leaflet Icon Setup
+const LeafletL = L as any;
+delete LeafletL.Icon.Default.prototype._getIconUrl;
+LeafletL.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -43,7 +44,7 @@ const MapRefresher: React.FC<{
   isTracking: boolean 
 }> = ({ points, currentPos, mode, isTracking }) => {
   const map = useMap();
-  const TRACK_ZOOM = 21.2;
+  const TRACK_ZOOM = 21;
 
   useEffect(() => {
     if (mode === 'Trk') {
@@ -77,26 +78,16 @@ const App: React.FC = () => {
   const [isGpsInitializing, setIsGpsInitializing] = useState(true);
 
   const [tracking, setTracking] = useState<TrackingState>({
-    isActive: false,
-    startPoint: null,
-    path: [],
-    initialAltitude: null,
-    currentAltitude: null,
-    altSource: 'GPS'
+    isActive: false, startPoint: null, path: [], initialAltitude: null, currentAltitude: null, altSource: 'GPS'
   });
 
   const [mapping, setMapping] = useState<MappingState>({
-    isActive: false,
-    isBunkerActive: false,
-    points: [],
-    isClosed: false
+    isActive: false, isBunkerActive: false, points: [], isClosed: false
   });
 
   const watchId = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
-  const wakeLockRef = useRef<any>(null);
 
-  // Dismiss splash when component successfully mounts
   useEffect(() => {
     const splash = document.getElementById('splash');
     if (splash) {
@@ -111,11 +102,7 @@ const App: React.FC = () => {
     lastUpdateRef.current = now;
 
     const newPoint: GeoPoint = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      alt: pos.coords.altitude,
-      accuracy: pos.coords.accuracy,
-      timestamp: now
+      lat: pos.coords.latitude, lng: pos.coords.longitude, alt: pos.coords.altitude, accuracy: pos.coords.accuracy, timestamp: now
     };
 
     setGpsError(null);
@@ -127,9 +114,7 @@ const App: React.FC = () => {
         const lastInPath = prev.path[prev.path.length - 1];
         if (lastInPath && calculateDistance(lastInPath, newPoint) < 0.05) return prev;
         return {
-          ...prev,
-          path: [...prev.path, newPoint],
-          currentAltitude: newPoint.alt,
+          ...prev, path: [...prev.path, newPoint], currentAltitude: newPoint.alt,
           initialAltitude: prev.initialAltitude === null ? newPoint.alt : prev.initialAltitude
         };
       });
@@ -150,15 +135,10 @@ const App: React.FC = () => {
   }, [tracking.isActive, mapping.isActive, mapping.isClosed]);
 
   const startGps = useCallback(() => {
-    if (!navigator.geolocation) {
-      setGpsError("Geolocation unavailable.");
-      return;
-    }
-    setGpsError(null);
+    if (!navigator.geolocation) { setGpsError("No GPS"); return; }
     if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
     watchId.current = navigator.geolocation.watchPosition(
-      handlePositionUpdate,
-      (err) => { setGpsError(err.message || "Signal Lost"); },
+      handlePositionUpdate, (err) => { setGpsError(err.message); },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 25000 }
     );
   }, [handlePositionUpdate]);
@@ -169,19 +149,16 @@ const App: React.FC = () => {
   }, [startGps]);
 
   const totalDistance = tracking.isActive && tracking.path.length > 1
-    ? calculateDistance(tracking.path[0], tracking.path[tracking.path.length - 1])
-    : 0;
+    ? calculateDistance(tracking.path[0], tracking.path[tracking.path.length - 1]) : 0;
 
   const elevationChange = (tracking.currentAltitude ?? 0) - (tracking.initialAltitude ?? 0);
 
   const mapMetrics = useMemo(() => {
     if (mapping.points.length < 2) return null;
-    let totalLen = 0;
-    let bunkerLen = 0;
+    let totalLen = 0; let bunkerLen = 0;
     for (let i = 0; i < mapping.points.length - 1; i++) {
       const d = calculateDistance(mapping.points[i], mapping.points[i+1]);
-      totalLen += d;
-      if (mapping.points[i+1].type === 'bunker') bunkerLen += d;
+      totalLen += d; if (mapping.points[i+1].type === 'bunker') bunkerLen += d;
     }
     if (mapping.isClosed) totalLen += calculateDistance(mapping.points[mapping.points.length - 1], mapping.points[0]);
     const area = calculatePolygonArea(mapping.points);
@@ -190,30 +167,23 @@ const App: React.FC = () => {
   }, [mapping.points, mapping.isClosed]);
 
   return (
-    <div className="flex flex-col h-full w-full select-none bg-slate-900 font-sans text-white overflow-hidden relative">
+    <div className="flex flex-col h-full w-full select-none bg-slate-900 text-white overflow-hidden relative">
       <div className="h-[env(safe-area-inset-top)] w-full bg-slate-800 shrink-0"></div>
 
       <header className="p-3 flex items-center justify-between border-b border-slate-700 bg-slate-800/95 z-[1000] shrink-0">
         <div className="flex items-center gap-1">
-          <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-xs transition-all ${mode === 'Trk' ? 'bg-blue-600' : 'bg-slate-700 text-slate-400'}`}>TRK</button>
-          <button onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }} className={`px-4 py-2 rounded-xl font-black text-xs transition-all ${mode === 'Grn' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-400'}`}>GRN</button>
+          <button onClick={() => setMode('Trk')} className={`px-4 py-2 rounded-xl font-black text-xs ${mode === 'Trk' ? 'bg-blue-600' : 'bg-slate-700 text-slate-400'}`}>TRK</button>
+          <button onClick={() => { setMode('Grn'); setTracking(prev => ({ ...prev, isActive: false })); }} className={`px-4 py-2 rounded-xl font-black text-xs ${mode === 'Grn' ? 'bg-emerald-600' : 'bg-slate-700 text-slate-400'}`}>GRN</button>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"><MapIcon size={12} /><span className="text-[10px] font-black uppercase">{mapProvider}</span></button>
-          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600"><Ruler size={12} /><span className="text-[10px] font-black uppercase">{units}</span></button>
+          <button onClick={() => setMapProvider(p => p === 'Google' ? 'OSM' : 'Google')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 text-[10px] font-black"><MapIcon size={12} />{mapProvider}</button>
+          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="px-3 py-2 bg-slate-700 rounded-xl flex items-center gap-1.5 border border-slate-600 text-[10px] font-black"><Ruler size={12} />{units}</button>
         </div>
       </header>
 
       <main className="flex-1 relative overflow-hidden flex flex-col bg-slate-900">
         <div className="absolute inset-0 z-0">
-          <MapContainer 
-            center={[0,0]} 
-            zoom={3} 
-            className="w-full h-full" 
-            zoomControl={false} 
-            attributionControl={false}
-            style={{ background: '#0f172a' }}
-          >
+          <MapContainer center={[0,0]} zoom={3} className="w-full h-full" zoomControl={false} attributionControl={false} style={{ background: '#0f172a' }}>
             {mapProvider === 'OSM' ? (
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
             ) : (
@@ -226,12 +196,7 @@ const App: React.FC = () => {
                 <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.3 }} />
               </>
             )}
-            {mode === 'Trk' && (
-              <>
-                {tracking.startPoint && <Marker position={[tracking.startPoint.lat, tracking.startPoint.lng]} icon={redIcon} />}
-                {tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#ef4444" weight={5} />}
-              </>
-            )}
+            {mode === 'Trk' && tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#ef4444" weight={5} />}
             {mode === 'Grn' && mapping.points.length > 1 && (
               <>
                 {mapping.points.map((p, idx) => {
@@ -249,8 +214,8 @@ const App: React.FC = () => {
           {isGpsInitializing && !gpsError && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 bg-slate-900/95 backdrop-blur-lg p-8 rounded-3xl border border-slate-700 shadow-2xl flex flex-col items-center text-center pointer-events-auto">
               <Loader2 className="animate-spin text-blue-500 mb-6" size={40} />
-              <h2 className="text-xl font-black tracking-widest uppercase mb-2">GPS Link</h2>
-              <p className="text-slate-400 text-[10px] leading-relaxed">Securing Satellite Lock...</p>
+              <h2 className="text-xl font-black tracking-widest uppercase">GPS Link</h2>
+              <p className="text-slate-400 text-[10px]">Locking Satellites...</p>
             </div>
           )}
 
@@ -269,10 +234,10 @@ const App: React.FC = () => {
                 </div>
               ) : mapMetrics && (
                 <div className="bg-slate-900/95 backdrop-blur p-3 rounded-2xl border border-slate-700 shadow-2xl grid grid-cols-2 gap-2 pointer-events-auto">
-                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Perim</p><p className="text-xl font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Bunk</p><p className="text-xl font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
-                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Area</p><p className="text-xl font-black text-blue-400">{units === 'Yards' ? (mapMetrics.area * 1.196).toFixed(0) : mapMetrics.area.toFixed(0)} <small className="text-[9px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
-                  <div className="bg-slate-800/80 p-2 rounded-xl border border-slate-700/50"><p className="text-[9px] text-slate-500 font-bold uppercase">Ratio</p><p className="text-xl font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl"><p className="text-[9px] text-slate-500 font-bold uppercase">Perim</p><p className="text-xl font-black text-emerald-400">{toDisplayDistance(mapMetrics.totalLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl"><p className="text-[9px] text-slate-500 font-bold uppercase">Bunk</p><p className="text-xl font-black text-amber-400">{toDisplayDistance(mapMetrics.bunkerLen, units)}{units === 'Yards' ? 'yd' : 'm'}</p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl"><p className="text-[9px] text-slate-500 font-bold uppercase">Area</p><p className="text-xl font-black text-blue-400">{(mapMetrics.area * (units === 'Yards' ? 1.196 : 1)).toFixed(0)} <small className="text-[9px]">{units === 'Yards' ? 'SQYD' : 'M²'}</small></p></div>
+                  <div className="bg-slate-800/80 p-2 rounded-xl"><p className="text-[9px] text-slate-500 font-bold uppercase">Ratio</p><p className="text-xl font-black text-red-400">{mapMetrics.bunkerPct}%</p></div>
                 </div>
               )}
             </div>
@@ -287,11 +252,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="flex gap-2 w-full max-w-md">
                   <button onClick={() => setMapping({ isActive: true, points: currentPos ? [{ ...currentPos, type: 'green' }] : [], isBunkerActive: false, isClosed: false })} className="flex-1 py-5 bg-emerald-600 rounded-2xl font-black text-xs uppercase shadow-xl">New Green</button>
-                  <button 
-                    onPointerDown={() => setMapping(p => ({ ...p, isBunkerActive: true }))}
-                    onPointerUp={() => setMapping(p => ({ ...p, isBunkerActive: false }))}
-                    className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase shadow-xl border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-200' : 'bg-slate-700 border-slate-600'}`}
-                  >Bunker</button>
+                  <button onPointerDown={() => setMapping(p => ({ ...p, isBunkerActive: true }))} onPointerUp={() => setMapping(p => ({ ...p, isBunkerActive: false }))} className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase shadow-xl border ${mapping.isBunkerActive ? 'bg-amber-400 text-black border-amber-200' : 'bg-slate-700 border-slate-600'}`}>Bunker</button>
                   <button onClick={() => setMapping(p => ({ ...p, isClosed: true }))} className="flex-1 py-5 bg-blue-600 rounded-2xl font-black text-xs uppercase shadow-xl">Close</button>
                 </div>
               )}

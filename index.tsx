@@ -2,29 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-console.log("ProGolf: Booting React entry point...");
+console.log("ProGolf: Mounting application...");
 
 const rootElement = document.getElementById('root');
 
-if (!rootElement) {
-  console.error("Critical: #root element missing");
-} else {
+if (rootElement) {
   try {
     const root = ReactDOM.createRoot(rootElement);
-    root.render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
-    console.log("ProGolf: Initial render call successful.");
+    // REMOVED StrictMode: Leaflet does not support dual-mounts well.
+    root.render(<App />);
+    console.log("ProGolf: Render initiated.");
   } catch (err) {
-    console.error("ProGolf: React Mount Exception", err);
-    const debugDiv = document.getElementById('debug-console');
-    if (debugDiv) {
-      debugDiv.style.display = 'block';
-      const errorLabel = document.createElement('div');
-      errorLabel.innerText = "CRITICAL MOUNT ERROR: " + (err instanceof Error ? err.message : String(err));
-      debugDiv.appendChild(errorLabel);
-    }
+    console.error("ProGolf: Mount failed", err);
   }
+} else {
+  console.error("ProGolf: Root element not found");
 }
