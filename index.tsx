@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, Target, Trash2 } from 'lucide-react';
+import { Ruler, RotateCcw, Target, Trash2, AlertTriangle } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
@@ -62,11 +62,11 @@ const calculateArea = (points: GeoPoint[]): number => {
   return Math.abs(area) / 2;
 };
 
-// Accuracy Color Helper
+// Accuracy Color Thresholds: Green (<2m), Yellow (2m-5m), Red (>5m)
 const getAccuracyColor = (acc: number) => {
-  if (acc < 2) return '#10b981'; // Green
-  if (acc <= 5) return '#f59e0b'; // Yellow
-  return '#ef4444'; // Red
+  if (acc < 2) return '#10b981'; 
+  if (acc <= 5) return '#f59e0b';
+  return '#ef4444';
 };
 
 /** --- MAP COMPONENTS --- **/
@@ -74,10 +74,14 @@ const MapView: React.FC<{ mode: AppMode, pos: GeoPoint | null, active: boolean }
   const map = useMap();
   const centeredOnce = useRef(false);
 
+  // Immediate fix for Leaflet size calculation
+  useEffect(() => {
+    const interval = setInterval(() => map.invalidateSize(), 500);
+    return () => clearInterval(interval);
+  }, [map]);
+
   useEffect(() => {
     if (pos) {
-      // If we haven't centered once, snap immediately to user location.
-      // If active (tracking/mapping), follow the user.
       if (!centeredOnce.current || active) {
         const zoom = active ? (mode === 'Trk' ? 18 : 20) : 18;
         map.setView([pos.lat, pos.lng], zoom, { animate: true });
@@ -89,11 +93,37 @@ const MapView: React.FC<{ mode: AppMode, pos: GeoPoint | null, active: boolean }
   return null;
 };
 
+/** --- MODAL COMPONENT --- **/
+const ConfirmModal: React.FC<{ onConfirm: () => void, onCancel: () => void }> = ({ onConfirm, onCancel }) => (
+  <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl">
+    <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl animate-in zoom-in-95 duration-200 pointer-events-auto">
+      <div className="flex justify-center mb-6">
+        <div className="p-4 bg-amber-500/10 rounded-full">
+          <AlertTriangle size={48} className="text-amber-500" />
+        </div>
+      </div>
+      <h3 className="text-xl font-black text-center mb-2 tracking-tight">START NEW TRACK?</h3>
+      <p className="text-slate-400 text-center text-sm mb-8 leading-relaxed">
+        This will clear all current path and elevation data for a fresh start.
+      </p>
+      <div className="flex flex-col gap-3">
+        <button onClick={onConfirm} className="w-full py-4 bg-blue-600 rounded-2xl font-black text-xs tracking-widest uppercase shadow-lg shadow-blue-600/20 active:scale-95 transition-transform">
+          YES, NEW TRACK
+        </button>
+        <button onClick={onCancel} className="w-full py-4 bg-slate-800 rounded-2xl font-black text-xs tracking-widest uppercase text-slate-400 active:scale-95 transition-transform">
+          CANCEL
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 /** --- MAIN APPLICATION --- **/
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('Trk');
   const [units, setUnits] = useState<UnitSystem>('Yards');
   const [pos, setPos] = useState<GeoPoint | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const [trk, setTrk] = useState<TrackingState>({ isActive: false, path: [], initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
@@ -110,7 +140,6 @@ const App: React.FC = () => {
         };
         setPos(pt);
 
-        // Update Tracking path
         if (trk.isActive) {
           setTrk(prev => {
             const last = prev.path[prev.path.length - 1];
@@ -124,7 +153,6 @@ const App: React.FC = () => {
           });
         }
 
-        // Update Mapping green perimeter
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
@@ -141,8 +169,7 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watch);
   }, [trk.isActive, grn.isActive, grn.isBunkerActive, grn.isClosed]);
 
-  // Derived Values
-  const totalDist = trk.isActive && trk.path.length > 1 ? calculateDistance(trk.path[0], trk.path[trk.path.length-1]) : 0;
+  const totalDist = trk.path.length > 1 ? calculateDistance(trk.path[0], trk.path[trk.path.length-1]) : 0;
   const elevDelta = (trk.currentAltitude !== null && trk.initialAltitude !== null) ? trk.currentAltitude - trk.initialAltitude : 0;
   
   const grnStats = useMemo(() => {
@@ -160,6 +187,19 @@ const App: React.FC = () => {
     };
   }, [grn.points, grn.isClosed]);
 
+  const handleNewTrackClick = () => {
+    if (trk.isActive || trk.path.length > 0) {
+      setShowConfirm(true);
+    } else {
+      performNewTrack();
+    }
+  };
+
+  const performNewTrack = () => {
+    setTrk({ isActive: true, path: pos ? [pos] : [], initialAltitude: pos?.alt ?? null, currentAltitude: pos?.alt ?? null });
+    setShowConfirm(false);
+  };
+
   // Splash Cleanup
   useEffect(() => {
     const splash = document.getElementById('splash');
@@ -176,6 +216,8 @@ const App: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0">
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
       
+      {showConfirm && <ConfirmModal onConfirm={performNewTrack} onCancel={() => setShowConfirm(false)} />}
+
       {/* HEADER */}
       <header className="px-5 py-3 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
         <div className="flex bg-slate-800/50 p-1 rounded-2xl border border-white/5">
@@ -188,20 +230,38 @@ const App: React.FC = () => {
       </header>
 
       {/* MAP AREA */}
-      <main className="flex-1 relative overflow-hidden bg-slate-950">
+      <main className="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
         <div className="absolute inset-0 z-0 h-full w-full">
-          <MapContainer center={[0,0]} zoom={2} className="h-full w-full" zoomControl={false} attributionControl={false}>
+          <MapContainer 
+            center={[0,0]} 
+            zoom={2} 
+            className="h-full w-full" 
+            zoomControl={false} 
+            attributionControl={false}
+            style={{ height: '100%', width: '100%' }}
+          >
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
             <MapView mode={mode} pos={pos} active={trk.isActive || grn.isActive} />
             
             {pos && (
               <>
+                {/* Accuracy Circle - Always visible when position is determined */}
+                <Circle 
+                  center={[pos.lat, pos.lng]} 
+                  radius={pos.accuracy} 
+                  pathOptions={{ 
+                    fillColor: getAccuracyColor(pos.accuracy), 
+                    fillOpacity: 0.2, 
+                    weight: 2, 
+                    color: getAccuracyColor(pos.accuracy), 
+                    opacity: 0.5 
+                  }} 
+                />
                 <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2, stroke: true }} />
-                <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ fillColor: getAccuracyColor(pos.accuracy), fillOpacity: 0.15, weight: 1, color: getAccuracyColor(pos.accuracy), opacity: 0.3 }} />
               </>
             )}
 
-            {mode === 'Trk' && trk.path.length > 1 && <Polyline positions={trk.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="10,12" />}
+            {trk.path.length > 1 && <Polyline positions={trk.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="10,12" />}
             
             {mode === 'Grn' && grn.points.length > 1 && (
               <>
@@ -221,9 +281,9 @@ const App: React.FC = () => {
           <div className="pointer-events-auto">
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/5 shadow-2xl relative">
               <div className="absolute top-3 right-6 flex items-center gap-2">
-                 <div className={`w-2 h-2 rounded-full ${pos ? (pos.accuracy < 2 ? 'bg-emerald-500' : pos.accuracy <= 5 ? 'bg-amber-500' : 'bg-red-500') : 'bg-slate-700 animate-pulse'}`}></div>
+                 <div className={`w-2.5 h-2.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) === '#10b981' ? 'bg-emerald-500' : getAccuracyColor(pos.accuracy) === '#f59e0b' ? 'bg-amber-500' : 'bg-red-500' : 'bg-slate-700 animate-pulse'}`}></div>
                  <span className="text-[10px] font-black text-slate-400 opacity-80 uppercase tracking-tighter">
-                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'WAITING FOR GPS...'}
+                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'SEARCHING...'}
                  </span>
               </div>
 
@@ -240,7 +300,7 @@ const App: React.FC = () => {
                   <div className="text-center">
                     <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">ELEVATION</p>
                     <div className="text-4xl font-black tabular-nums text-amber-400">
-                      {trk.isActive ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
+                      {trk.isActive || trk.path.length > 0 ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
                       <span className="text-[10px] ml-1 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'ft' : 'm'}</span>
                     </div>
                   </div>
@@ -258,17 +318,17 @@ const App: React.FC = () => {
           <div className="pb-10 pointer-events-auto flex flex-col items-center gap-4">
             {mode === 'Trk' ? (
               <button 
-                onClick={() => setTrk(p => ({ ...p, isActive: !p.isActive, path: pos ? [pos] : [], initialAltitude: pos?.alt ?? null }))}
-                className={`w-full max-w-[300px] h-20 rounded-[2.5rem] font-black text-sm tracking-[0.3em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 ${trk.isActive ? 'bg-red-600 shadow-red-600/20' : 'bg-blue-600 shadow-blue-600/30'}`}
+                onClick={handleNewTrackClick}
+                className="w-full max-w-[300px] h-20 rounded-[2.5rem] font-black text-sm tracking-[0.3em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 bg-blue-600 shadow-blue-600/30 active:scale-95"
               >
                 <RotateCcw size={20} className={trk.isActive ? 'animate-spin' : ''} />
-                {trk.isActive ? 'RESET TRACK' : 'START TRACKING'}
+                NEW TRACK
               </button>
             ) : (
               <div className="w-full max-w-[340px] flex flex-col gap-3">
                 <div className="flex gap-3">
-                   <button onClick={() => setGrn({ isActive: true, isBunkerActive: false, points: pos ? [{...pos, type:'green'}] : [], isClosed: false })} className="flex-1 h-16 rounded-3xl bg-emerald-600 font-black text-[10px] tracking-widest uppercase shadow-lg">NEW GREEN</button>
-                   <button onClick={() => setGrn(p => ({ ...p, isClosed: true }))} disabled={grn.points.length < 3} className="flex-1 h-16 rounded-3xl bg-blue-600 font-black text-[10px] tracking-widest uppercase shadow-lg disabled:opacity-30">CLOSE LOOP</button>
+                   <button onClick={() => setGrn({ isActive: true, isBunkerActive: false, points: pos ? [{...pos, type:'green'}] : [], isClosed: false })} className="flex-1 h-16 rounded-3xl bg-emerald-600 font-black text-[10px] tracking-widest uppercase shadow-lg active:scale-95 transition-transform">NEW GREEN</button>
+                   <button onClick={() => setGrn(p => ({ ...p, isClosed: true }))} disabled={grn.points.length < 3} className="flex-1 h-16 rounded-3xl bg-blue-600 font-black text-[10px] tracking-widest uppercase shadow-lg disabled:opacity-30 active:scale-95 transition-transform">CLOSE LOOP</button>
                 </div>
                 <div className="flex gap-3">
                   <button 
@@ -278,7 +338,7 @@ const App: React.FC = () => {
                   >
                     HOLD FOR BUNKER
                   </button>
-                  <button onClick={() => setGrn({ isActive: false, isBunkerActive: false, points: [], isClosed: false })} className="flex-1 h-16 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-500">
+                  <button onClick={() => setGrn({ isActive: false, isBunkerActive: false, points: [], isClosed: false })} className="flex-1 h-16 rounded-3xl bg-slate-900 border border-white/10 flex items-center justify-center text-slate-500 active:scale-95 transition-transform">
                     <Trash2 size={20} />
                   </button>
                 </div>

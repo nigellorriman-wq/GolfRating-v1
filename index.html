@@ -32,11 +32,11 @@
     <style>
       html, body { 
         margin: 0; padding: 0; width: 100vw; height: 100vh; 
-        overflow: hidden; background-color: #0f172a; 
+        overflow: hidden; background-color: #020617; 
         position: fixed;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       }
-      #root { width: 100%; height: 100%; position: relative; z-index: 10; }
+      #root { width: 100%; height: 100%; position: relative; z-index: 10; display: flex; flex-direction: column; }
       
       .splash-screen {
         position: fixed; inset: 0; display: flex; flex-direction: column; 
@@ -61,10 +61,13 @@
         display: none; white-space: pre-wrap; font-family: monospace;
       }
       
+      /* Essential Leaflet Fixes */
       .leaflet-container {
         height: 100% !important;
         width: 100% !important;
         background: #020617 !important;
+        flex: 1;
+        outline: none;
       }
 
       .glow-text { text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
