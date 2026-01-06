@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, Trash2, AlertTriangle, Cpu } from 'lucide-react';
+import { Ruler, RotateCcw, Trash2, AlertTriangle } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
@@ -68,8 +68,20 @@ const calculateArea = (points: GeoPoint[]): number => {
 
 const getAccuracyColor = (acc: number) => {
   if (acc < 2) return '#10b981';
-  if (acc <= 5) return '#f59e0b';
+  if (acc <= 7) return '#f59e0b';
   return '#ef4444';
+};
+
+const getSensorSource = (accuracy: number | null) => {
+  if (accuracy === null) return "SEARCHING...";
+  if (accuracy > 25) return "NETWORK / WI-FI";
+  return "GNSS / GPS";
+};
+
+const getElevationSource = (altAcc: number | null) => {
+  if (altAcc === null) return "GNSS / GPS";
+  if (altAcc < 2.5) return "BAROMETER / FUSED";
+  return "GNSS / GPS";
 };
 
 /** --- MAP COMPONENTS --- **/
@@ -216,13 +228,13 @@ const App: React.FC = () => {
             {pos && (
               <>
                 <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ fillColor: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, color: getAccuracyColor(pos.accuracy), opacity: 0.3 }} />
-                <CircleMarker center={[pos.lat, pos.lng]} radius={5} pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2, stroke: true }} />
+                <CircleMarker center={[pos.lat, pos.lng]} radius={5} pathOptions={{ color: '#ffffff', fillColor: '#10b981', fillOpacity: 1, weight: 2, stroke: true }} />
               </>
             )}
             {mode === 'Trk' && trk.startPoint && pos && (
               <>
                 <CircleMarker center={[trk.startPoint.lat, trk.startPoint.lng]} radius={6} pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2 }} />
-                <Polyline positions={[[trk.startPoint.lat, trk.startPoint.lng], [pos.lat, pos.lng]]} color="#ff0000" weight={3} dashArray="8, 8" />
+                <Polyline positions={[[trk.startPoint.lat, trk.startPoint.lng], [pos.lat, pos.lng]]} color="#ff0000" weight={4} />
               </>
             )}
             {mode === 'Grn' && grn.points.length > 1 && (
@@ -252,13 +264,14 @@ const App: React.FC = () => {
                       </div>
                       <div className="text-[11px] font-black text-slate-500 tabular-nums">±{pos ? pos.accuracy.toFixed(1) : '--'}</div>
                     </div>
-                    <p className="text-[8px] font-black text-slate-400/60 uppercase tracking-tighter mt-1 flex items-center gap-1">
-                      <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-slate-700'}`} style={{backgroundColor: pos ? getAccuracyColor(pos.accuracy) : undefined}}></div>
-                      GPS / GNSS
-                    </p>
+                    {/* Enlarged sensor info closer to main readout */}
+                    <div className="text-[10px] font-black text-slate-400/80 uppercase tracking-widest mt-0.5 flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-slate-700'}`} style={{backgroundColor: pos ? getAccuracyColor(pos.accuracy) : undefined}}></span>
+                      {getSensorSource(pos?.accuracy ?? null)}
+                    </div>
                   </div>
                   
-                  <div className="h-10 w-[1px] bg-white/5"></div>
+                  <div className="h-12 w-[1px] bg-white/5"></div>
                   
                   <div className="text-center flex flex-col items-center">
                     <p className="text-slate-500 text-[8px] font-black uppercase tracking-widest leading-none mb-0.5">ELEVATION</p>
@@ -271,7 +284,10 @@ const App: React.FC = () => {
                         ±{pos?.altAccuracy ? formatAlt(pos.altAccuracy, units) : '--'}
                       </div>
                     </div>
-                    <p className="text-[8px] font-black text-slate-400/60 uppercase tracking-tighter mt-1">ALTIMETER</p>
+                    {/* Enlarged dynamic sensor source label */}
+                    <div className="text-[10px] font-black text-slate-400/80 uppercase tracking-widest mt-0.5">
+                      {getElevationSource(pos?.altAccuracy ?? null)}
+                    </div>
                   </div>
                 </div>
               ) : (
