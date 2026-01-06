@@ -24,14 +24,14 @@
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#020617">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     
     <style>
       html, body { 
-        margin: 0; padding: 0; width: 100vw; height: 100vh; 
+        margin: 0; padding: 0; width: 100%; height: 100%; 
         overflow: hidden; background-color: #020617; 
         position: fixed;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -53,14 +53,6 @@
         animation: spin 0.8s linear infinite;
       }
 
-      .diagnostic-overlay {
-        position: fixed; top: env(safe-area-inset-top, 10px); left: 10px; right: 10px;
-        background: rgba(127, 29, 29, 0.95); color: white;
-        padding: 12px; border-radius: 12px; font-size: 11px;
-        z-index: 10001; border: 1px solid #ef4444;
-        display: none; white-space: pre-wrap; font-family: monospace;
-      }
-      
       /* Essential Leaflet Fixes */
       .leaflet-container {
         height: 100% !important;
@@ -80,9 +72,7 @@
       }
     </style>
 </head>
-<body class="bg-slate-900">
-    <div id="diagnostic" class="diagnostic-overlay"></div>
-    
+<body class="bg-[#020617]">
     <div class="splash-screen" id="splash">
         <div class="mb-8 flex flex-col items-center">
             <h1 style="color:white; font-weight:900; letter-spacing:8px; font-size: 20px;">GOLF MEASURE</h1>
@@ -96,18 +86,12 @@
     <div id="root"></div>
 
     <script>
-      const diag = document.getElementById('diagnostic');
       const splash = document.getElementById('splash');
       const status = document.getElementById('splash-status');
       const emergency = document.getElementById('emergency-clear');
       
-      window.onerror = function(msg, url, line) {
-        diag.style.display = 'block';
-        diag.innerText = `[BOOT ERROR]\nMessage: ${msg}\nLine: ${line}`;
-      };
-
-      setTimeout(() => { if(splash) status.innerText = "Syncing GPS..."; status.style.color = '#3b82f6'; }, 2000);
-      setTimeout(() => { if(splash) emergency.style.display = 'block'; }, 6000);
+      setTimeout(() => { if(splash) status.innerText = "Syncing GPS..."; status.style.color = '#3b82f6'; }, 1500);
+      setTimeout(() => { if(splash) emergency.style.display = 'block'; }, 4000);
     </script>
 
     <script type="text/babel" data-type="module" data-presets="typescript,react" src="./index.tsx"></script>
