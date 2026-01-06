@@ -68,7 +68,7 @@ const calculateArea = (points: GeoPoint[]): number => {
 
 const getAccuracyColor = (acc: number) => {
   if (acc < 2) return '#10b981'; // Green
-  if (acc <= 5) return '#f59e0b'; // Amber (2-5m per user correction)
+  if (acc <= 5) return '#f59e0b'; // Amber (2-5m range)
   return '#ef4444'; // Red
 };
 
@@ -189,7 +189,6 @@ const App: React.FC = () => {
   const [trk, setTrk] = useState<TrackingState>({ isActive: false, startPoint: null, initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
 
-  // Ref for isBunkerActive to prevent stale closure issues in watchPosition callback
   const isBunkerActiveRef = useRef(false);
 
   useEffect(() => {
@@ -211,7 +210,6 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
-            // Only add points if moved more than 0.4 metres
             if (!last || calculateDistance(last, pt) >= 0.4) {
               return { 
                 ...prev, 
@@ -271,13 +269,13 @@ const App: React.FC = () => {
 
   const startBunker = useCallback(() => {
     if (grn.isActive && !grn.isClosed) {
-      isBunkerActiveRef.current = true; // Set ref immediately for GPS callback
+      isBunkerActiveRef.current = true;
       setGrn(p => ({ ...p, isBunkerActive: true }));
     }
   }, [grn.isActive, grn.isClosed]);
 
   const stopBunker = useCallback(() => {
-    isBunkerActiveRef.current = false; // Set ref immediately for GPS callback
+    isBunkerActiveRef.current = false;
     setGrn(p => ({ ...p, isBunkerActive: false }));
   }, []);
 
@@ -297,9 +295,9 @@ const App: React.FC = () => {
         <div className="flex gap-2">
           <button 
             onClick={() => setShowAbout(true)} 
-            className="px-3 py-1.5 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-all flex items-center gap-2"
+            className="px-3 py-1.5 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-all flex items-center gap-2 group"
           >
-            <Info size={14} className="text-blue-400" />
+            <Info size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
             <span className="text-[10px] font-black text-slate-300 tracking-widest uppercase">About</span>
           </button>
           <button 
