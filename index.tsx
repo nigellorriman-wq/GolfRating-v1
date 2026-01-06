@@ -107,44 +107,47 @@ const MapController: React.FC<{
 
 const AboutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   <div className="fixed inset-0 z-[10001] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-    <div className="bg-[#1e293b] w-full max-w-sm rounded-[1.5rem] border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+    <div className="bg-[#1e293b] w-full max-w-sm rounded-[1.5rem] border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
       <div className="p-5 border-b border-white/5 flex items-center justify-between">
-        <h3 className="text-sm font-black tracking-widest uppercase text-white">About the App</h3>
-        <button onClick={onClose} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
-          <X size={18} className="text-slate-400" />
+        <h3 className="text-sm font-black tracking-widest uppercase text-white">Application Manual</h3>
+        <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg transition-colors">
+          <X size={20} className="text-slate-400" />
         </button>
       </div>
-      <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
+      <div className="p-5 overflow-y-auto custom-scrollbar space-y-5">
         <section>
-          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Distance Tracking (TRK)</h4>
+          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">1. Distance Tracking (TRK)</h4>
           <p className="text-slate-400 text-[11px] leading-relaxed">
-            Start a track at your ball position and walk to the landing spot. The app calculates:
+            Use this to measure shot distances. Stand at your ball, tap 'NEW TRACK', and walk to the landing spot.
             <br/><br/>
-            • <strong>DIST</strong>: Direct horizontal distance.
+            • <strong>DIST</strong>: Your direct horizontal distance in yards/meters.
             <br/>
-            • <strong>ELEV</strong>: Vertical change relative to start.
-            <br/><br/>
-            The sensor indicator shows if elevation is sourced from GPS (GNSS) or a Barometric pressure sensor (BARO) for higher precision.
+            • <strong>ELEV</strong>: Vertical change. If your device supports it, the app automatically uses barometric pressure (BARO) for high-precision elevation data.
           </p>
         </section>
         
         <div className="h-px bg-white/5"></div>
         
         <section>
-          <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Green Mapping (GRN)</h4>
+          <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">2. Green Mapping (GRN)</h4>
           <p className="text-slate-400 text-[11px] leading-relaxed">
-            Walk the perimeter of the green to map its shape and calculate total area.
+            Walk the entire perimeter of the green to calculate its total surface area and perimeter length.
             <br/><br/>
-            • <strong>Close Loop</strong>: Finalizes the shape when you return to your starting point (within 5 yards).
+            • <strong>Mapping</strong>: Tap 'NEW GREEN' and start walking.
             <br/>
-            • <strong>Bunker Analysis</strong>: Hold the 'Hold for Bunker' button while walking sections that border sand. The app will calculate the exact percentage of the perimeter that is bunkered.
+            • <strong>Close Loop</strong>: Enabled once you are within 5 yards of your starting point. Finalizes the polygon shape.
+            <br/>
+            • <strong>Bunker Analysis</strong>: While walking sections of the perimeter that touch a bunker, hold the 'HOLD FOR BUNKER' button. This highlights the segment and calculates the 'BUNKER %' of the total green boundary.
           </p>
         </section>
 
-        <section className="bg-white/5 p-3 rounded-xl border border-white/5">
-          <h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">GPS Precision</h4>
-          <p className="text-slate-500 text-[10px]">
-            Accuracy depends on your device's GNSS receiver. For best results, ensure a clear view of the sky. The green/yellow/red circle on the map indicates current signal confidence.
+        <section className="bg-blue-600/10 p-4 rounded-xl border border-blue-500/20">
+          <h4 className="text-[9px] font-black text-blue-300 uppercase tracking-widest mb-1">GPS & Precision</h4>
+          <p className="text-slate-500 text-[10px] leading-snug">
+            The colored ring around your position indicates GPS accuracy. 
+            <span className="text-emerald-500 font-bold"> Green</span> is under 2m, 
+            <span className="text-amber-500 font-bold"> Amber</span> is 2-7m, 
+            <span className="text-red-500 font-bold"> Red</span> is poor signal. For best results, keep the device away from your body with a clear view of the sky.
           </p>
         </section>
       </div>
@@ -286,17 +289,24 @@ const App: React.FC = () => {
       {showGrnConfirm && <ConfirmDialogue title="New Green?" message="Wipe current green mapping data?" onConfirm={performNewGreen} onCancel={() => setShowGrnConfirm(false)} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 
-      <header className="px-3 py-1 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
+      <header className="px-3 py-1.5 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
         <div className="flex bg-slate-800/50 p-1 rounded-xl border border-white/5">
           <button onClick={() => setMode('Trk')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>TRACK</button>
           <button onClick={() => setMode('Grn')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GREEN</button>
         </div>
-        <div className="flex gap-1.5">
-          <button onClick={() => setShowAbout(true)} className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform">
-            <Info size={14} className="text-slate-400" />
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowAbout(true)} 
+            className="px-3 py-1.5 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-all flex items-center gap-2"
+          >
+            <Info size={14} className="text-blue-400" />
+            <span className="text-[10px] font-black text-slate-300 tracking-widest">ABOUT</span>
           </button>
-          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform">
-            <Ruler size={14} className="text-blue-400" />
+          <button 
+            onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} 
+            className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform"
+          >
+            <Ruler size={16} className="text-blue-400" />
           </button>
         </div>
       </header>
@@ -390,12 +400,7 @@ const App: React.FC = () => {
                         color="text-blue-400" 
                         unit={units === 'Yards' ? 'Yd²' : 'm²'} 
                       />
-                    ) : (
-                      <div className="px-2 py-1 flex items-center justify-between gap-1 border-b border-white/5 bg-white/[0.02] rounded-lg mb-0.5 opacity-30">
-                        <p className="text-slate-500 text-[8px] font-black uppercase tracking-tighter leading-none shrink-0">GREEN AREA</p>
-                        <span className="text-[11px] font-black text-slate-400 uppercase">--</span>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
