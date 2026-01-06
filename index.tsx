@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Ruler, RotateCcw, AlertTriangle, Info, X } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
@@ -105,6 +105,53 @@ const MapController: React.FC<{
   return null;
 };
 
+const AboutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="fixed inset-0 z-[10001] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+    <div className="bg-[#1e293b] w-full max-w-sm rounded-[1.5rem] border border-white/10 shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+      <div className="p-5 border-b border-white/5 flex items-center justify-between">
+        <h3 className="text-sm font-black tracking-widest uppercase text-white">About the App</h3>
+        <button onClick={onClose} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
+          <X size={18} className="text-slate-400" />
+        </button>
+      </div>
+      <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
+        <section>
+          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-2">Distance Tracking (TRK)</h4>
+          <p className="text-slate-400 text-[11px] leading-relaxed">
+            Start a track at your ball position and walk to the landing spot. The app calculates:
+            <br/><br/>
+            • <strong>DIST</strong>: Direct horizontal distance.
+            <br/>
+            • <strong>ELEV</strong>: Vertical change relative to start.
+            <br/><br/>
+            The sensor indicator shows if elevation is sourced from GPS (GNSS) or a Barometric pressure sensor (BARO) for higher precision.
+          </p>
+        </section>
+        
+        <div className="h-px bg-white/5"></div>
+        
+        <section>
+          <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-2">Green Mapping (GRN)</h4>
+          <p className="text-slate-400 text-[11px] leading-relaxed">
+            Walk the perimeter of the green to map its shape and calculate total area.
+            <br/><br/>
+            • <strong>Close Loop</strong>: Finalizes the shape when you return to your starting point (within 5 yards).
+            <br/>
+            • <strong>Bunker Analysis</strong>: Hold the 'Hold for Bunker' button while walking sections that border sand. The app will calculate the exact percentage of the perimeter that is bunkered.
+          </p>
+        </section>
+
+        <section className="bg-white/5 p-3 rounded-xl border border-white/5">
+          <h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">GPS Precision</h4>
+          <p className="text-slate-500 text-[10px]">
+            Accuracy depends on your device's GNSS receiver. For best results, ensure a clear view of the sky. The green/yellow/red circle on the map indicates current signal confidence.
+          </p>
+        </section>
+      </div>
+    </div>
+  </div>
+);
+
 const ConfirmDialogue: React.FC<{ title: string, message: string, onConfirm: () => void, onCancel: () => void }> = ({ title, message, onConfirm, onCancel }) => (
   <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
     <div className="bg-[#1e293b] w-full max-w-sm rounded-[1.5rem] border border-white/10 p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -134,9 +181,13 @@ const App: React.FC = () => {
   const [pos, setPos] = useState<GeoPoint | null>(null);
   const [showTrkConfirm, setShowTrkConfirm] = useState(false);
   const [showGrnConfirm, setShowGrnConfirm] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   const [trk, setTrk] = useState<TrackingState>({ isActive: false, startPoint: null, initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
+
+  // Ref for isBunkerActive to prevent stale closure issues in watchPosition callback
+  const isBunkerActiveRef = useRef(false);
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -157,11 +208,11 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
+            // Only add points if moved more than 0.4 meters
             if (!last || calculateDistance(last, pt) >= 0.4) {
-              // Directly use the prev state for isBunkerActive to ensure sync during rapid toggles
               return { 
                 ...prev, 
-                points: [...prev.points, { ...pt, type: prev.isBunkerActive ? 'bunker' : 'green' }] 
+                points: [...prev.points, { ...pt, type: isBunkerActiveRef.current ? 'bunker' : 'green' }] 
               };
             }
             return prev;
@@ -215,13 +266,15 @@ const App: React.FC = () => {
     setShowGrnConfirm(false);
   };
 
-  const startBunker = useCallback((e: React.PointerEvent) => {
+  const startBunker = useCallback(() => {
     if (grn.isActive && !grn.isClosed) {
+      isBunkerActiveRef.current = true; // Set ref immediately for GPS callback
       setGrn(p => ({ ...p, isBunkerActive: true }));
     }
   }, [grn.isActive, grn.isClosed]);
 
-  const stopBunker = useCallback((e: React.PointerEvent) => {
+  const stopBunker = useCallback(() => {
+    isBunkerActiveRef.current = false; // Set ref immediately for GPS callback
     setGrn(p => ({ ...p, isBunkerActive: false }));
   }, []);
 
@@ -231,15 +284,21 @@ const App: React.FC = () => {
       
       {showTrkConfirm && <ConfirmDialogue title="Reset Track?" message="Wipe current distance tracking and start fresh?" onConfirm={performNewTrack} onCancel={() => setShowTrkConfirm(false)} />}
       {showGrnConfirm && <ConfirmDialogue title="New Green?" message="Wipe current green mapping data?" onConfirm={performNewGreen} onCancel={() => setShowGrnConfirm(false)} />}
+      {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 
       <header className="px-3 py-1 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
         <div className="flex bg-slate-800/50 p-1 rounded-xl border border-white/5">
           <button onClick={() => setMode('Trk')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>TRACK</button>
           <button onClick={() => setMode('Grn')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GREEN</button>
         </div>
-        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform">
-          <Ruler size={14} className="text-blue-400" />
-        </button>
+        <div className="flex gap-1.5">
+          <button onClick={() => setShowAbout(true)} className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform">
+            <Info size={14} className="text-slate-400" />
+          </button>
+          <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform">
+            <Ruler size={14} className="text-blue-400" />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
@@ -324,8 +383,7 @@ const App: React.FC = () => {
                     <Stat label="PERIMETER" value={grnStats ? formatDist(grnStats.perimeter, units) : '--'} color="text-emerald-400" unit={units === 'Yards' ? 'yd' : 'm'} />
                     <Stat label="BUNKER LEN" value={grnStats ? formatDist(grnStats.bunkerLen, units) : '--'} color="text-amber-400" unit={units === 'Yards' ? 'yd' : 'm'} />
                     <Stat label="BUNKER %" value={grnStats ? `${grnStats.bunkerPct}` : '--'} color="text-amber-500" unit="%" />
-                    {/* Only display Green Area if it is >= 1 sq meter (or sq yd equivalent) to prevent scientific notation */}
-                    {grnStats && grnStats.area >= 1 ? (
+                    {grnStats && (grnStats.area * (units === 'Yards' ? 1.196 : 1)) >= 1 ? (
                       <Stat 
                         label="GREEN AREA" 
                         value={Math.round(grnStats.area * (units === 'Yards' ? 1.196 : 1)).toString()} 
@@ -333,7 +391,10 @@ const App: React.FC = () => {
                         unit={units === 'Yards' ? 'Yd²' : 'm²'} 
                       />
                     ) : (
-                      <Stat label="GREEN AREA" value="--" color="text-slate-700" unit={units === 'Yards' ? 'Yd²' : 'm²'} />
+                      <div className="px-2 py-1 flex items-center justify-between gap-1 border-b border-white/5 bg-white/[0.02] rounded-lg mb-0.5 opacity-30">
+                        <p className="text-slate-500 text-[8px] font-black uppercase tracking-tighter leading-none shrink-0">GREEN AREA</p>
+                        <span className="text-[11px] font-black text-slate-400 uppercase">--</span>
+                      </div>
                     )}
                   </div>
                 </div>
