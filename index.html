@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Golf Measure</title>
+    
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script type="importmap">
 {
@@ -15,52 +16,96 @@
     "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
     "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
     "leaflet": "https://esm.sh/leaflet@1.9.4"
+    
   }
 }
 </script>
+
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    
     <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #0f172a; position: fixed; font-family: -apple-system, system-ui, sans-serif; }
-      #root { width: 100%; height: 100%; position: relative; z-index: 1; }
-      .splash-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e293b, #0f172a); z-index: 9999; transition: opacity 0.5s ease-out; }
+      html, body { 
+        margin: 0; padding: 0; width: 100vw; height: 100vh; 
+        overflow: hidden; background-color: #0f172a; 
+        position: fixed;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      #root { width: 100%; height: 100%; position: relative; z-index: 10; }
+      
+      .splash-screen {
+        position: fixed; inset: 0; display: flex; flex-direction: column; 
+        align-items: center; justify-content: center; 
+        background: #0f172a;
+        z-index: 9999;
+        transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
       @keyframes spin { to { transform: rotate(360deg); } }
-      .spinner { width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
-      .diagnostic-overlay { position: fixed; top: 10px; left: 10px; right: 10px; background: rgba(127, 29, 29, 0.95); color: white; padding: 12px; border-radius: 8px; font-size: 12px; z-index: 10000; border: 1px solid #ef4444; display: none; }
-      .leaflet-container { height: 100% !important; width: 100% !important; background: #0f172a !important; }
-      .glow-blue { text-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+      .spinner {
+        width: 32px; height: 32px; border: 3px solid rgba(59, 130, 246, 0.1); 
+        border-top-color: #3b82f6; border-radius: 50%; 
+        animation: spin 0.8s linear infinite;
+      }
+
+      .diagnostic-overlay {
+        position: fixed; top: env(safe-area-inset-top, 10px); left: 10px; right: 10px;
+        background: rgba(127, 29, 29, 0.95); color: white;
+        padding: 12px; border-radius: 12px; font-size: 11px;
+        z-index: 10001; border: 1px solid #ef4444;
+        display: none; white-space: pre-wrap; font-family: monospace;
+      }
+      
+      .leaflet-container {
+        height: 100% !important;
+        width: 100% !important;
+        background: #020617 !important;
+      }
+
+      .glow-text { text-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+      
+      #emergency-clear {
+        margin-top: 30px; padding: 10px 20px; 
+        background: rgba(255,255,255,0.05); color: #475569;
+        border-radius: 8px; font-size: 10px; font-weight: bold;
+        display: none; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);
+      }
     </style>
 </head>
-<body>
+<body class="bg-slate-900">
     <div id="diagnostic" class="diagnostic-overlay"></div>
-    <div id="root">
-      <div class="splash-screen" id="splash">
-        <div class="mb-6 flex flex-col items-center">
-            <h1 style="color:white; font-weight:900; letter-spacing:6px; font-size: 24px;">GOLF MEASURE</h1>
-            <div class="h-1 w-12 bg-blue-500 rounded-full mt-1"></div>
+    
+    <div class="splash-screen" id="splash">
+        <div class="mb-8 flex flex-col items-center">
+            <h1 style="color:white; font-weight:900; letter-spacing:8px; font-size: 20px;">GOLF MEASURE</h1>
+            <div class="h-1 w-8 bg-blue-500 rounded-full mt-2"></div>
         </div>
         <div class="spinner"></div>
-        <p id="splash-status" style="color: #64748b; font-size: 11px; margin-top: 24px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Initializing Systems</p>
-      </div>
+        <p id="splash-status" style="color: #475569; font-size: 10px; margin-top: 24px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">Initializing Engine</p>
+        <button id="emergency-clear" onclick="document.getElementById('splash').remove()">Force Start App</button>
     </div>
+
+    <div id="root"></div>
+
     <script>
-      window.onerror = (msg, url, line) => {
-        const d = document.getElementById('diagnostic');
-        d.style.display = 'block';
-        d.innerText = `Error: ${msg}\nLine: ${line}`;
+      const diag = document.getElementById('diagnostic');
+      const splash = document.getElementById('splash');
+      const status = document.getElementById('splash-status');
+      const emergency = document.getElementById('emergency-clear');
+      
+      window.onerror = function(msg, url, line) {
+        diag.style.display = 'block';
+        diag.innerText = `[BOOT ERROR]\nMessage: ${msg}\nLine: ${line}`;
       };
-      // Emergency splash removal
-      setTimeout(() => {
-        const s = document.getElementById('splash');
-        if (s) {
-          s.style.opacity = '0';
-          setTimeout(() => s.remove(), 500);
-        }
-      }, 5000);
+
+      setTimeout(() => { if(splash) status.innerText = "Syncing GPS..."; status.style.color = '#3b82f6'; }, 2000);
+      setTimeout(() => { if(splash) emergency.style.display = 'block'; }, 6000);
     </script>
+
     <script type="text/babel" data-type="module" data-presets="typescript,react" src="./index.tsx"></script>
 </body>
 </html>
