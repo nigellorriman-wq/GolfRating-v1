@@ -1,5 +1,4 @@
-
-import { GeoPoint, UnitSystem } from '../types';
+import { GeoPoint, UnitSystem } from '../types.ts';
 
 export const calculateDistance = (p1: GeoPoint, p2: GeoPoint): number => {
   const R = 6371e3; // metres

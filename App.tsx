@@ -5,14 +5,14 @@ import {
   GeoPoint, 
   TrackingState, 
   MappingState
-} from './types';
+} from './types.ts';
 import { 
   calculateDistance, 
   toDisplayDistance, 
   toDisplayElevation, 
   calculatePolygonArea, 
   getAccuracyColor 
-} from './utils/geoUtils';
+} from './utils/geoUtils.ts';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
 import { Ruler, RotateCcw, Navigation, Target, Activity } from 'lucide-react';
@@ -194,7 +194,14 @@ const App: React.FC = () => {
             {currentPos && (
               <>
                 <Marker position={[currentPos.lat, currentPos.lng]} icon={blueIcon} />
-                <Circle center={[currentPos.lat, currentPos.lng]} radius={currentPos.accuracy} pathOptions={{ fillColor: getAccuracyColor(currentPos.accuracy), color: 'transparent', fillOpacity: 0.15 }} />
+                {/* Fix: use direct style props instead of pathOptions to match the project's react-leaflet version/types */}
+                <Circle 
+                  center={[currentPos.lat, currentPos.lng]} 
+                  radius={currentPos.accuracy} 
+                  fillColor={getAccuracyColor(currentPos.accuracy)} 
+                  color="transparent" 
+                  fillOpacity={0.15} 
+                />
               </>
             )}
             {mode === 'Trk' && tracking.path.length > 1 && <Polyline positions={tracking.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="8, 12" />}
@@ -205,7 +212,16 @@ const App: React.FC = () => {
                   const prev = mapping.points[idx - 1];
                   return <Polyline key={`s-${idx}`} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={5} />;
                 })}
-                {mapping.isClosed && <Polygon positions={mapping.points.map(p => [p.lat, p.lng])} pathOptions={{ color: '#10b981', weight: 1, fillColor: '#10b981', fillOpacity: 0.1 }} />}
+                {/* Fix: use direct style props instead of pathOptions to match the project's react-leaflet version/types */}
+                {mapping.isClosed && (
+                  <Polygon 
+                    positions={mapping.points.map(p => [p.lat, p.lng])} 
+                    color="#10b981" 
+                    weight={1} 
+                    fillColor="#10b981" 
+                    fillOpacity={0.1} 
+                  />
+                )}
               </>
             )}
           </MapContainer>

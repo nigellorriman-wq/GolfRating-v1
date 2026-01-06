@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>ProGolf Tracker</title>
     
+    <!-- Babel allows the browser to understand .tsx files on your phone/PC -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <script type="importmap">
 {
   "imports": {
@@ -12,7 +15,6 @@
     "react-dom": "https://esm.sh/react-dom@18.3.1",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client?deps=react@18.3.1",
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
-    "react/jsx-dev-runtime": "https://esm.sh/react@18.3.1/jsx-dev-runtime",
     "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
     "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
     "leaflet": "https://esm.sh/leaflet@1.9.4",
@@ -52,6 +54,14 @@
         border-top-color: #3b82f6; border-radius: 50%; 
         animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
+
+      .diagnostic-overlay {
+        position: fixed; top: 10px; left: 10px; right: 10px;
+        background: rgba(127, 29, 29, 0.95); color: white;
+        padding: 12px; border-radius: 8px; font-size: 12px;
+        z-index: 10000; border: 1px solid #ef4444;
+        display: none; white-space: pre-wrap; word-break: break-all;
+      }
       
       .leaflet-container {
         height: 100% !important;
@@ -65,6 +75,7 @@
     </style>
 </head>
 <body class="bg-slate-900">
+    <div id="diagnostic" class="diagnostic-overlay"></div>
     <div id="root">
       <div class="splash-screen" id="splash">
         <div class="mb-6 flex flex-col items-center">
@@ -72,9 +83,34 @@
             <div class="h-1 w-12 bg-blue-500 rounded-full mt-1"></div>
         </div>
         <div class="spinner"></div>
-        <p style="color: #64748b; font-size: 11px; margin-top: 24px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Initializing Systems</p>
+        <p id="splash-status" style="color: #64748b; font-size: 11px; margin-top: 24px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Initializing Systems</p>
       </div>
     </div>
-    <script type="module" src="./index.tsx"></script>
+
+    <script>
+      const diag = document.getElementById('diagnostic');
+      const status = document.getElementById('splash-status');
+      
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        diag.style.display = 'block';
+        diag.innerText = 'Error: ' + msg + '\nFile: ' + url + '\nLine: ' + lineNo;
+        return false;
+      };
+
+      window.addEventListener('unhandledrejection', function(event) {
+        diag.style.display = 'block';
+        diag.innerText = 'Promise Error: ' + event.reason;
+      });
+
+      setTimeout(() => {
+        if (document.getElementById('splash')) {
+          status.innerText = 'Connecting to Satellites...';
+          status.style.color = '#3b82f6';
+        }
+      }, 3000);
+    </script>
+
+    <!-- Using type="text/babel" to allow on-the-fly transpilation in non-dev environments -->
+    <script type="text/babel" data-type="module" data-presets="typescript,react" src="./index.tsx"></script>
 </body>
 </html>
