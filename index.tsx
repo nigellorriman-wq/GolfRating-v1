@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, Target, Trash2, AlertTriangle } from 'lucide-react';
+import { Ruler, RotateCcw, Trash2, AlertTriangle, Cpu, Crosshair } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
@@ -14,13 +14,14 @@ interface GeoPoint {
   lng: number;
   alt: number | null;
   accuracy: number;
+  altAccuracy: number | null;
   timestamp: number;
   type?: PointType;
 }
 
 interface TrackingState {
   isActive: boolean;
-  path: GeoPoint[];
+  startPoint: GeoPoint | null;
   initialAltitude: number | null;
   currentAltitude: number | null;
 }
@@ -32,9 +33,9 @@ interface MappingState {
   isClosed: boolean;
 }
 
-/** --- GEOSPATIAL UTILITIES --- **/
+/** --- UTILITIES --- **/
 const calculateDistance = (p1: GeoPoint, p2: GeoPoint): number => {
-  const R = 6371e3; // metres
+  const R = 6371e3; // Earth radius in meters
   const φ1 = p1.lat * Math.PI / 180;
   const φ2 = p2.lat * Math.PI / 180;
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
@@ -65,7 +66,6 @@ const calculateArea = (points: GeoPoint[]): number => {
   return Math.abs(area) / 2;
 };
 
-// Accuracy Color Logic: Green (<2m), Yellow (2m-5m), Red (>5m)
 const getAccuracyColor = (acc: number) => {
   if (acc < 2) return '#10b981'; // Green
   if (acc <= 5) return '#f59e0b'; // Yellow
@@ -81,7 +81,6 @@ const MapController: React.FC<{
   const map = useMap();
   const centeredOnce = useRef(false);
 
-  // Resize fix
   useEffect(() => {
     const interval = setInterval(() => map.invalidateSize(), 1000);
     return () => clearInterval(interval);
@@ -100,31 +99,24 @@ const MapController: React.FC<{
   return null;
 };
 
-/** --- CONFIRMATION DIALOGUE --- **/
 const ConfirmDialogue: React.FC<{ onConfirm: () => void, onCancel: () => void }> = ({ onConfirm, onCancel }) => (
-  <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-    <div className="bg-[#1e293b] w-full max-w-sm rounded-3xl border border-white/10 p-8 shadow-2xl animate-in fade-in zoom-in duration-200">
+  <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+    <div className="bg-[#1e293b] w-full max-w-sm rounded-[2.5rem] border border-white/10 p-8 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
       <div className="flex justify-center mb-6">
         <div className="p-4 bg-amber-500/10 rounded-full">
-          <AlertTriangle size={44} className="text-amber-500" />
+          <AlertTriangle size={48} className="text-amber-500" />
         </div>
       </div>
-      <h3 className="text-xl font-black text-center mb-2 tracking-tight text-white">RESET TRACK?</h3>
+      <h3 className="text-xl font-black text-center mb-2 tracking-tight text-white uppercase">Reset Tracking?</h3>
       <p className="text-slate-400 text-center text-sm mb-8 leading-relaxed">
-        Are you sure you want to start a new track? All current progress will be lost.
+        Start a new track? Current measurements will be cleared.
       </p>
       <div className="flex flex-col gap-3">
-        <button 
-          onClick={onConfirm}
-          className="w-full py-4 bg-red-600 rounded-2xl font-black text-xs tracking-widest uppercase text-white shadow-lg active:scale-95 transition-transform"
-        >
-          YES, NEW TRACK
+        <button onClick={onConfirm} className="w-full py-4 bg-blue-600 rounded-2xl font-black text-xs tracking-widest uppercase text-white shadow-lg active:scale-95 transition-transform">
+          Yes, New Track
         </button>
-        <button 
-          onClick={onCancel}
-          className="w-full py-4 bg-slate-800 rounded-2xl font-black text-xs tracking-widest uppercase text-slate-400 active:scale-95 transition-transform"
-        >
-          CANCEL
+        <button onClick={onCancel} className="w-full py-4 bg-slate-800 rounded-2xl font-black text-xs tracking-widest uppercase text-slate-400 active:scale-95 transition-transform">
+          Cancel
         </button>
       </div>
     </div>
@@ -138,10 +130,10 @@ const App: React.FC = () => {
   const [pos, setPos] = useState<GeoPoint | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const [trk, setTrk] = useState<TrackingState>({ isActive: false, path: [], initialAltitude: null, currentAltitude: null });
+  const [trk, setTrk] = useState<TrackingState>({ isActive: false, startPoint: null, initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
 
-  // Location Monitoring
+  // Location Listener
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
@@ -151,21 +143,16 @@ const App: React.FC = () => {
           lng: p.coords.longitude, 
           alt: p.coords.altitude, 
           accuracy: p.coords.accuracy, 
+          altAccuracy: p.coords.altitudeAccuracy,
           timestamp: Date.now()
         };
         setPos(pt);
 
         if (trk.isActive) {
-          setTrk(prev => {
-            const last = prev.path[prev.path.length - 1];
-            if (last && calculateDistance(last, pt) < 0.2) return prev;
-            return {
-              ...prev, 
-              path: [...prev.path, pt], 
-              currentAltitude: pt.alt,
-              initialAltitude: prev.initialAltitude === null ? pt.alt : prev.initialAltitude
-            };
-          });
+          setTrk(prev => ({
+            ...prev,
+            currentAltitude: pt.alt
+          }));
         }
 
         if (grn.isActive && !grn.isClosed) {
@@ -178,13 +165,14 @@ const App: React.FC = () => {
           });
         }
       },
-      (e) => console.warn("GPS Warning", e),
-      { enableHighAccuracy: true, maximumAge: 0 }
+      (e) => console.warn("GPS Signal Loss", e),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
     );
     return () => navigator.geolocation.clearWatch(watch);
   }, [trk.isActive, grn.isActive, grn.isBunkerActive, grn.isClosed]);
 
-  const totalDist = trk.path.length > 1 ? calculateDistance(trk.path[0], trk.path[trk.path.length - 1]) : 0;
+  // Track Distance: Straight line from start to current
+  const currentTrackDist = (trk.startPoint && pos) ? calculateDistance(trk.startPoint, pos) : 0;
   const elevDelta = (trk.currentAltitude !== null && trk.initialAltitude !== null) ? trk.currentAltitude - trk.initialAltitude : 0;
   
   const grnStats = useMemo(() => {
@@ -203,7 +191,7 @@ const App: React.FC = () => {
   }, [grn.points, grn.isClosed]);
 
   const handleNewTrackClick = () => {
-    if (trk.path.length > 0 || trk.isActive) {
+    if (trk.startPoint || trk.isActive) {
       setShowConfirm(true);
     } else {
       performNewTrack();
@@ -211,12 +199,12 @@ const App: React.FC = () => {
   };
 
   const performNewTrack = () => {
-    setTrk({ isActive: true, path: pos ? [pos] : [], initialAltitude: pos?.alt ?? null, currentAltitude: pos?.alt ?? null });
+    setTrk({ isActive: true, startPoint: pos, initialAltitude: pos?.alt ?? null, currentAltitude: pos?.alt ?? null });
     setShowConfirm(false);
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none fixed inset-0">
+    <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0">
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
       
       {showConfirm && <ConfirmDialogue onConfirm={performNewTrack} onCancel={() => setShowConfirm(false)} />}
@@ -226,7 +214,7 @@ const App: React.FC = () => {
           <button onClick={() => setMode('Trk')} className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>TRACK</button>
           <button onClick={() => setMode('Grn')} className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GREEN</button>
         </div>
-        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2.5 bg-slate-800/80 rounded-xl border border-white/10 active:scale-95">
+        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2.5 bg-slate-800/80 rounded-xl border border-white/10 active:scale-95 transition-transform">
           <Ruler size={18} className="text-blue-400" />
         </button>
       </header>
@@ -246,7 +234,6 @@ const App: React.FC = () => {
             
             {pos && (
               <>
-                {/* Accuracy Circle: always visible, follows color thresholds */}
                 <Circle 
                   center={[pos.lat, pos.lng]} 
                   radius={pos.accuracy} 
@@ -262,8 +249,15 @@ const App: React.FC = () => {
               </>
             )}
 
-            {trk.path.length > 1 && <Polyline positions={trk.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="10, 12" />}
-            
+            {/* Rubber Band Tracking: Blue Start, Red Line */}
+            {mode === 'Trk' && trk.startPoint && pos && (
+              <>
+                <CircleMarker center={[trk.startPoint.lat, trk.startPoint.lng]} radius={8} pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 3 }} />
+                <Polyline positions={[[trk.startPoint.lat, trk.startPoint.lng], [pos.lat, pos.lng]]} color="#ff0000" weight={5} dashArray="12, 12" />
+              </>
+            )}
+
+            {/* Green Mode: Recorded path */}
             {mode === 'Grn' && grn.points.length > 1 && (
               <>
                 {grn.points.map((p, i) => {
@@ -277,36 +271,54 @@ const App: React.FC = () => {
           </MapContainer>
         </div>
 
-        <div className="absolute inset-0 z-10 pointer-events-none p-5 flex flex-col justify-between">
+        <div className="absolute inset-0 z-10 pointer-events-none p-4 flex flex-col justify-between">
           <div className="pointer-events-auto">
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/5 shadow-2xl relative">
-              <div className="absolute top-3 right-6 flex items-center gap-2">
-                 <div className={`w-2.5 h-2.5 rounded-full ${pos ? (pos.accuracy < 2 ? 'bg-emerald-500' : pos.accuracy <= 5 ? 'bg-amber-500' : 'bg-red-500') : 'bg-slate-700 animate-pulse'}`}></div>
-                 <span className="text-[10px] font-black text-slate-400 opacity-80 uppercase tracking-tighter">
-                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'SEARCHING...'}
-                 </span>
+              
+              {/* SENSOR METHOD */}
+              <div className="absolute top-3 left-6 flex items-center gap-1.5 px-3 py-1 bg-slate-900/60 rounded-full border border-white/5">
+                <Cpu size={10} className="text-blue-400" />
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sensor: GPS / GNSS</span>
               </div>
 
               {mode === 'Trk' ? (
-                <div className="flex items-center justify-around py-2">
-                  <div className="text-center">
-                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">DISTANCE</p>
-                    <div className="text-5xl font-black tabular-nums glow-text">
-                      {formatDist(totalDist, units)}
-                      <span className="text-[10px] ml-1.5 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'yd' : 'm'}</span>
+                <div className="flex flex-col pt-6 pb-2">
+                  <div className="flex items-center justify-around">
+                    <div className="text-center relative">
+                      {/* Distance Accuracy - Above Readout */}
+                      <div className="flex items-center justify-center gap-1.5 mb-2">
+                        <div className={`w-1.5 h-1.5 rounded-full ${pos ? (pos.accuracy < 2 ? 'bg-emerald-500' : pos.accuracy <= 5 ? 'bg-amber-500' : 'bg-red-500') : 'bg-slate-700 animate-pulse'}`}></div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">
+                          ±{pos ? pos.accuracy.toFixed(1) : '0.0'}m ACCURACY
+                        </span>
+                      </div>
+                      
+                      <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">DISTANCE</p>
+                      <div className="text-5xl font-black tabular-nums glow-text">
+                        {formatDist(currentTrackDist, units)}
+                        <span className="text-xs ml-1.5 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'yd' : 'm'}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="h-10 w-[1px] bg-white/5"></div>
-                  <div className="text-center">
-                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">ELEVATION</p>
-                    <div className="text-4xl font-black tabular-nums text-amber-400">
-                      {trk.isActive || trk.path.length > 0 ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
-                      <span className="text-[10px] ml-1 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'ft' : 'm'}</span>
+                    
+                    <div className="h-14 w-[1px] bg-white/5 mx-2"></div>
+                    
+                    <div className="text-center">
+                      <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">ELEVATION</p>
+                      <div className="flex items-baseline justify-center gap-1.5">
+                        <div className="text-4xl font-black tabular-nums text-amber-400">
+                          {trk.isActive ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
+                          <span className="text-xs ml-1 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'ft' : 'm'}</span>
+                        </div>
+                        {/* Elevation Accuracy - Next to readout */}
+                        <div className="text-[10px] font-black text-slate-500 tabular-nums">
+                          ±{pos?.altAccuracy ? formatAlt(pos.altAccuracy, units) : '--'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 pt-4">
                   <Stat label="Perimeter" value={grnStats ? formatDist(grnStats.perimeter, units) : '--'} color="text-emerald-400" unit={units === 'Yards' ? 'yd' : 'm'} />
                   <Stat label="Bunker %" value={grnStats ? `${grnStats.bunkerPct}%` : '--'} color="text-amber-400" unit="" />
                   <Stat label="Area" value={grnStats ? (grnStats.area * (units === 'Yards' ? 1.196 : 1)).toFixed(0) : '--'} color="text-blue-400" unit={units === 'Yards' ? 'sqyd' : 'm²'} fullWidth />
@@ -315,11 +327,11 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="pb-10 pointer-events-auto flex flex-col items-center gap-4">
+          <div className="pb-8 pointer-events-auto flex flex-col items-center gap-4">
             {mode === 'Trk' ? (
               <button 
                 onClick={handleNewTrackClick}
-                className="w-full max-w-[300px] h-20 rounded-[2.5rem] font-black text-sm tracking-[0.3em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 bg-blue-600 shadow-blue-600/30 active:scale-95"
+                className="w-full max-w-[320px] h-20 rounded-[2.5rem] font-black text-sm tracking-[0.3em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 bg-blue-600 shadow-blue-600/30 active:scale-95"
               >
                 <RotateCcw size={20} className={trk.isActive ? 'animate-spin' : ''} />
                 NEW TRACK
