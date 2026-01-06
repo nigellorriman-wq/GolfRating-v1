@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, Navigation, Target, Trash2 } from 'lucide-react';
+import { Ruler, RotateCcw, Target, Trash2 } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
@@ -62,21 +62,15 @@ const calculateArea = (points: GeoPoint[]): number => {
   return Math.abs(area) / 2;
 };
 
-// Markers and Icons
-const userIcon = new L.Icon({
-  iconUrl: 'https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678111-map-marker-512.png',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32]
-});
-
 /** --- MAP COMPONENTS --- **/
-const MapView: React.FC<{ mode: AppMode, pos: GeoPoint | null, active: boolean, path: GeoPoint[] }> = ({ mode, pos, active, path }) => {
+const MapView: React.FC<{ mode: AppMode, pos: GeoPoint | null, active: boolean }> = ({ mode, pos, active }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
 
   useEffect(() => {
-    if (pos && (!centeredOnce.current || (active && mode === 'Trk'))) {
-      const zoom = mode === 'Trk' ? 18 : 20;
+    // If we have a position and haven't centered yet, or if tracking is active, snap to user
+    if (pos && (!centeredOnce.current || active)) {
+      const zoom = active ? (mode === 'Trk' ? 18 : 20) : 17;
       map.setView([pos.lat, pos.lng], zoom, { animate: true });
       centeredOnce.current = true;
     }
@@ -106,7 +100,7 @@ const App: React.FC = () => {
         };
         setPos(pt);
 
-        // Update Tracking
+        // Update Tracking path
         if (trk.isActive) {
           setTrk(prev => {
             const last = prev.path[prev.path.length - 1];
@@ -120,7 +114,7 @@ const App: React.FC = () => {
           });
         }
 
-        // Update Mapping
+        // Update Mapping green perimeter
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
@@ -131,7 +125,7 @@ const App: React.FC = () => {
           });
         }
       },
-      (e) => console.warn("GPS Error", e),
+      (e) => console.warn("GPS Warning", e),
       { enableHighAccuracy: true, maximumAge: 0 }
     );
     return () => navigator.geolocation.clearWatch(watch);
@@ -156,46 +150,49 @@ const App: React.FC = () => {
     };
   }, [grn.points, grn.isClosed]);
 
-  // Cleanup splash on first render
+  // Automatic Splash Cleanup
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const splash = document.getElementById('splash');
-      if (splash) {
+    const splash = document.getElementById('splash');
+    if (splash) {
+      const timer = setTimeout(() => {
         splash.style.opacity = '0';
         setTimeout(() => splash.remove(), 600);
-      }
-    }, 1500);
-    return () => clearTimeout(timer);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#020617] text-white overflow-hidden touch-none">
-      <div className="h-[env(safe-area-inset-top)] bg-[#0f172a]"></div>
+    <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0">
+      <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
       
       {/* HEADER */}
-      <header className="px-5 py-4 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/80 backdrop-blur-lg z-50">
-        <div className="flex bg-slate-800/50 p-1 rounded-2xl border border-white/5 shadow-inner">
+      <header className="px-5 py-3 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
+        <div className="flex bg-slate-800/50 p-1 rounded-2xl border border-white/5">
           <button onClick={() => setMode('Trk')} className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>TRACK</button>
           <button onClick={() => setMode('Grn')} className={`px-5 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GREEN</button>
         </div>
-        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2.5 bg-slate-800/80 rounded-xl border border-white/10 active:scale-95 transition-transform">
+        <button onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} className="p-2.5 bg-slate-800/80 rounded-xl border border-white/10 active:scale-95">
           <Ruler size={18} className="text-blue-400" />
         </button>
       </header>
 
-      {/* MAP AREA */}
+      {/* MAP AREA - ALWAYS RENDERS */}
       <main className="flex-1 relative overflow-hidden bg-slate-950">
         <div className="absolute inset-0 z-0 h-full w-full">
           <MapContainer center={[0,0]} zoom={2} className="h-full w-full" zoomControl={false} attributionControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
-            <MapView mode={mode} pos={pos} active={trk.isActive || grn.isActive} path={mode === 'Trk' ? trk.path : grn.points} />
+            <MapView mode={mode} pos={pos} active={trk.isActive || grn.isActive} />
+            
             {pos && (
               <>
-                <Marker position={[pos.lat, pos.lng]} icon={userIcon} />
-                <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} fillColor={pos.accuracy < 8 ? '#10b981' : '#f59e0b'} fillOpacity={0.1} stroke={false} />
+                <CircleMarker center={[pos.lat, pos.lng]} radius={8} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1, weight: 3, stroke: true }} />
+                <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ fillColor: pos.accuracy < 10 ? '#10b981' : '#f59e0b', fillOpacity: 0.1, stroke: false }} />
               </>
             )}
+
             {mode === 'Trk' && trk.path.length > 1 && <Polyline positions={trk.path.map(p => [p.lat, p.lng])} color="#3b82f6" weight={4} dashArray="10,12" />}
+            
             {mode === 'Grn' && grn.points.length > 1 && (
               <>
                 {grn.points.map((p, i) => {
@@ -212,20 +209,18 @@ const App: React.FC = () => {
         {/* OVERLAY UI */}
         <div className="absolute inset-0 z-10 pointer-events-none p-5 flex flex-col justify-between">
           <div className="pointer-events-auto">
-            <div className="bg-[#0f172a]/90 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50"></div>
-              
+            <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/5 shadow-2xl relative">
               <div className="absolute top-3 right-6 flex items-center gap-2">
                  <div className={`w-2 h-2 rounded-full ${pos ? (pos.accuracy < 10 ? 'bg-emerald-500' : 'bg-amber-500') : 'bg-red-500 animate-pulse'}`}></div>
                  <span className="text-[10px] font-black text-slate-400 opacity-80 uppercase tracking-tighter">
-                   {pos ? `±${pos.accuracy.toFixed(1)}m` : '± SEARCHING'}
+                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'SEARCHING GPS...'}
                  </span>
               </div>
 
               {mode === 'Trk' ? (
                 <div className="flex items-center justify-around py-2">
                   <div className="text-center">
-                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Total Distance</p>
+                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">DISTANCE</p>
                     <div className="text-5xl font-black tabular-nums glow-text">
                       {formatDist(totalDist, units)}
                       <span className="text-[10px] ml-1.5 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'yd' : 'm'}</span>
@@ -233,7 +228,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="h-10 w-[1px] bg-white/5"></div>
                   <div className="text-center">
-                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">Elevation</p>
+                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest mb-1">ELEVATION</p>
                     <div className="text-4xl font-black tabular-nums text-amber-400">
                       {trk.isActive ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
                       <span className="text-[10px] ml-1 opacity-40 lowercase font-bold tracking-normal">{units === 'Yards' ? 'ft' : 'm'}</span>
@@ -283,7 +278,7 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <div className="h-[env(safe-area-inset-bottom)] bg-[#020617]"></div>
+      <div className="h-[env(safe-area-inset-bottom)] bg-[#020617] shrink-0"></div>
     </div>
   );
 };
