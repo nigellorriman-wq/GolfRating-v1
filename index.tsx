@@ -63,7 +63,9 @@ const calculateArea = (points: GeoPoint[]): number => {
     const j = (i + 1) % coords.length;
     area += coords[i].x * coords[j].y - coords[j].x * coords[i].y;
   }
-  return Math.abs(area) / 2;
+  const result = Math.abs(area) / 2;
+  // Requirement: If green area is less than 1m2, report it as zero.
+  return result < 1 ? 0 : result;
 };
 
 const getAccuracyColor = (acc: number) => {
@@ -138,6 +140,12 @@ const App: React.FC = () => {
   const [trk, setTrk] = useState<TrackingState>({ isActive: false, startPoint: null, initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
 
+  // Use a ref for isBunkerActive to avoid stale closure issues in the watchPosition effect
+  const isBunkerActiveRef = useRef(false);
+  useEffect(() => {
+    isBunkerActiveRef.current = grn.isBunkerActive;
+  }, [grn.isBunkerActive]);
+
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
@@ -157,8 +165,12 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
+            // Only add points if moved more than 0.4 meters
             if (!last || calculateDistance(last, pt) >= 0.4) {
-              return { ...prev, points: [...prev.points, { ...pt, type: prev.isBunkerActive ? 'bunker' : 'green' }] };
+              return { 
+                ...prev, 
+                points: [...prev.points, { ...pt, type: isBunkerActiveRef.current ? 'bunker' : 'green' }] 
+              };
             }
             return prev;
           });
@@ -168,7 +180,7 @@ const App: React.FC = () => {
       { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
     );
     return () => navigator.geolocation.clearWatch(watch);
-  }, [trk.isActive, grn.isActive, grn.isBunkerActive, grn.isClosed]);
+  }, [trk.isActive, grn.isActive, grn.isClosed]);
 
   const currentTrackDist = (trk.startPoint && pos) ? calculateDistance(trk.startPoint, pos) : 0;
   const elevDelta = (trk.currentAltitude !== null && trk.initialAltitude !== null) ? trk.currentAltitude - trk.initialAltitude : 0;
@@ -181,7 +193,8 @@ const App: React.FC = () => {
       perimeter += d; if (grn.points[i+1].type === 'bunker') bunkerLen += d;
     }
     if (grn.isClosed) perimeter += calculateDistance(grn.points[grn.points.length - 1], grn.points[0]);
-    return { perimeter, bunkerLen, area: calculateArea(grn.points), bunkerPct: perimeter > 0 ? Math.round((bunkerLen / perimeter) * 100) : 0 };
+    const area = calculateArea(grn.points);
+    return { perimeter, bunkerLen, area, bunkerPct: perimeter > 0 ? Math.round((bunkerLen / perimeter) * 100) : 0 };
   }, [grn.points, grn.isClosed]);
 
   const closeLoopPossible = useMemo(() => {
@@ -210,8 +223,18 @@ const App: React.FC = () => {
     setShowGrnConfirm(false);
   };
 
+  const startBunker = useCallback(() => {
+    if (grn.isActive && !grn.isClosed) {
+      setGrn(p => ({ ...p, isBunkerActive: true }));
+    }
+  }, [grn.isActive, grn.isClosed]);
+
+  const stopBunker = useCallback(() => {
+    setGrn(p => ({ ...p, isBunkerActive: false }));
+  }, []);
+
   return (
-    <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0">
+    <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
       
       {showTrkConfirm && <ConfirmDialogue title="Reset Track?" message="Wipe current distance tracking and start fresh?" onConfirm={performNewTrack} onCancel={() => setShowTrkConfirm(false)} />}
@@ -318,7 +341,7 @@ const App: React.FC = () => {
 
           <div className="pb-4 pointer-events-auto flex flex-col items-center gap-3 px-3">
             {mode === 'Trk' ? (
-              <button onClick={handleNewTrackClick} className="w-full max-w-[180px] h-11 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-xl flex items-center justify-center gap-3 bg-blue-600 shadow-blue-600/20 active:scale-95 border border-white/10">
+              <button onClick={handleNewTrackClick} className="w-full max-w-[180px] h-11 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-xl flex items-center justify-center gap-3 bg-blue-600 shadow-blue-600/20 active:scale-95 border border-white/10 select-none">
                 <RotateCcw size={14} className={trk.isActive ? 'animate-spin' : ''} />
                 NEW TRACK
               </button>
@@ -327,23 +350,25 @@ const App: React.FC = () => {
                 <div className="flex gap-2">
                    <button 
                     onClick={handleNewGreenClick} 
-                    className={`flex-1 h-12 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-lg transition-all border border-white/5 ${grn.isActive && !grn.isClosed ? 'bg-emerald-900 text-emerald-400' : 'bg-emerald-600 text-white active:scale-95'}`}
+                    className={`flex-1 h-12 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-lg transition-all border border-white/5 select-none ${grn.isActive && !grn.isClosed ? 'bg-emerald-900 text-emerald-400' : 'bg-emerald-600 text-white active:scale-95'}`}
                    >
                     {grn.isActive && !grn.isClosed ? 'MAPPING...' : 'NEW GREEN'}
                    </button>
                    <button 
                     onClick={() => setGrn(p => ({ ...p, isClosed: true }))} 
                     disabled={!closeLoopPossible} 
-                    className="flex-1 h-12 rounded-2xl bg-blue-600 font-black text-[10px] tracking-widest uppercase shadow-lg disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 transition-all border border-white/5"
+                    className="flex-1 h-12 rounded-2xl bg-blue-600 font-black text-[10px] tracking-widest uppercase shadow-lg disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 transition-all border border-white/5 select-none"
                    >
                     CLOSE LOOP
                    </button>
                 </div>
                 <button 
                   disabled={!grn.isActive || grn.isClosed}
-                  onPointerDown={() => setGrn(p => ({ ...p, isBunkerActive: true }))} 
-                  onPointerUp={() => setGrn(p => ({ ...p, isBunkerActive: false }))} 
-                  className={`w-full h-14 rounded-2xl font-black text-[12px] tracking-widest uppercase transition-all flex items-center justify-center gap-3 disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 border border-white/5 ${grn.isBunkerActive ? 'bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]' : 'bg-amber-400 text-slate-900 shadow-lg'}`}
+                  onPointerDown={startBunker} 
+                  onPointerUp={stopBunker}
+                  onPointerLeave={stopBunker}
+                  onPointerCancel={stopBunker}
+                  className={`w-full h-14 rounded-2xl font-black text-[12px] tracking-widest uppercase transition-all flex items-center justify-center gap-3 disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 border border-white/5 select-none ${grn.isBunkerActive ? 'bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]' : 'bg-amber-400 text-slate-900 shadow-lg'}`}
                 >
                   {grn.isBunkerActive ? 'RECORDING BUNKER' : 'HOLD FOR BUNKER'}
                 </button>
