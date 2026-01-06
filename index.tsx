@@ -63,9 +63,7 @@ const calculateArea = (points: GeoPoint[]): number => {
     const j = (i + 1) % coords.length;
     area += coords[i].x * coords[j].y - coords[j].x * coords[i].y;
   }
-  const result = Math.abs(area) / 2;
-  // Requirement: If green area is less than 1m2, report it as zero.
-  return result < 1 ? 0 : result;
+  return Math.abs(area) / 2;
 };
 
 const getAccuracyColor = (acc: number) => {
@@ -140,12 +138,6 @@ const App: React.FC = () => {
   const [trk, setTrk] = useState<TrackingState>({ isActive: false, startPoint: null, initialAltitude: null, currentAltitude: null });
   const [grn, setGrn] = useState<MappingState>({ isActive: false, isBunkerActive: false, points: [], isClosed: false });
 
-  // Use a ref for isBunkerActive to avoid stale closure issues in the watchPosition effect
-  const isBunkerActiveRef = useRef(false);
-  useEffect(() => {
-    isBunkerActiveRef.current = grn.isBunkerActive;
-  }, [grn.isBunkerActive]);
-
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
@@ -165,11 +157,11 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
-            // Only add points if moved more than 0.4 meters
             if (!last || calculateDistance(last, pt) >= 0.4) {
+              // Directly use the prev state for isBunkerActive to ensure sync during rapid toggles
               return { 
                 ...prev, 
-                points: [...prev.points, { ...pt, type: isBunkerActiveRef.current ? 'bunker' : 'green' }] 
+                points: [...prev.points, { ...pt, type: prev.isBunkerActive ? 'bunker' : 'green' }] 
               };
             }
             return prev;
@@ -223,13 +215,13 @@ const App: React.FC = () => {
     setShowGrnConfirm(false);
   };
 
-  const startBunker = useCallback(() => {
+  const startBunker = useCallback((e: React.PointerEvent) => {
     if (grn.isActive && !grn.isClosed) {
       setGrn(p => ({ ...p, isBunkerActive: true }));
     }
   }, [grn.isActive, grn.isClosed]);
 
-  const stopBunker = useCallback(() => {
+  const stopBunker = useCallback((e: React.PointerEvent) => {
     setGrn(p => ({ ...p, isBunkerActive: false }));
   }, []);
 
@@ -332,7 +324,17 @@ const App: React.FC = () => {
                     <Stat label="PERIMETER" value={grnStats ? formatDist(grnStats.perimeter, units) : '--'} color="text-emerald-400" unit={units === 'Yards' ? 'yd' : 'm'} />
                     <Stat label="BUNKER LEN" value={grnStats ? formatDist(grnStats.bunkerLen, units) : '--'} color="text-amber-400" unit={units === 'Yards' ? 'yd' : 'm'} />
                     <Stat label="BUNKER %" value={grnStats ? `${grnStats.bunkerPct}` : '--'} color="text-amber-500" unit="%" />
-                    <Stat label="GREEN AREA" value={grnStats ? (grnStats.area * (units === 'Yards' ? 1.196 : 1)).toExponential(2) : '--'} color="text-blue-400" unit={units === 'Yards' ? 'Yd²' : 'm²'} />
+                    {/* Only display Green Area if it is >= 1 sq meter (or sq yd equivalent) to prevent scientific notation */}
+                    {grnStats && grnStats.area >= 1 ? (
+                      <Stat 
+                        label="GREEN AREA" 
+                        value={Math.round(grnStats.area * (units === 'Yards' ? 1.196 : 1)).toString()} 
+                        color="text-blue-400" 
+                        unit={units === 'Yards' ? 'Yd²' : 'm²'} 
+                      />
+                    ) : (
+                      <Stat label="GREEN AREA" value="--" color="text-slate-700" unit={units === 'Yards' ? 'Yd²' : 'm²'} />
+                    )}
                   </div>
                 </div>
               )}
