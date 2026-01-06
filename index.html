@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>ProGolf Tracker</title>
+    <title>Golf Measure</title>
     
     <!-- Babel allows the browser to understand .tsx files on your phone/PC -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,9 +17,8 @@
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
     "lucide-react": "https://esm.sh/lucide-react@0.446.0?deps=react@18.3.1",
     "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?deps=react@18.3.1,react-dom@18.3.1,leaflet@1.9.4",
-    "leaflet": "https://esm.sh/leaflet@1.9.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "leaflet": "https://esm.sh/leaflet@1.9.4"
+    
   }
 }
 </script>
@@ -79,7 +78,7 @@
     <div id="root">
       <div class="splash-screen" id="splash">
         <div class="mb-6 flex flex-col items-center">
-            <h1 style="color:white; font-weight:900; letter-spacing:6px; font-size: 24px;">PROGOLF</h1>
+            <h1 style="color:white; font-weight:900; letter-spacing:6px; font-size: 24px;">GOLF MEASURE</h1>
             <div class="h-1 w-12 bg-blue-500 rounded-full mt-1"></div>
         </div>
         <div class="spinner"></div>
@@ -90,6 +89,7 @@
     <script>
       const diag = document.getElementById('diagnostic');
       const status = document.getElementById('splash-status');
+      const splash = document.getElementById('splash');
       
       window.onerror = function(msg, url, lineNo, columnNo, error) {
         diag.style.display = 'block';
@@ -102,12 +102,21 @@
         diag.innerText = 'Promise Error: ' + event.reason;
       });
 
+      // Emergency splash removal if React fails to boot
+      setTimeout(() => {
+        if (splash && splash.parentNode) {
+          console.warn("Splash removal timeout reached. Forcing UI view.");
+          splash.style.opacity = '0';
+          setTimeout(() => { if(splash.parentNode) splash.remove(); }, 500);
+        }
+      }, 8000);
+
       setTimeout(() => {
         if (document.getElementById('splash')) {
           status.innerText = 'Connecting to Satellites...';
           status.style.color = '#3b82f6';
         }
-      }, 3000);
+      }, 2500);
     </script>
 
     <!-- Using type="text/babel" to allow on-the-fly transpilation in non-dev environments -->

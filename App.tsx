@@ -15,9 +15,9 @@ import {
 } from './utils/geoUtils.ts';
 import { MapContainer, TileLayer, Marker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
 import * as L from 'leaflet';
-import { Ruler, RotateCcw, Navigation, Target, Activity, Zap } from 'lucide-react';
+import { Ruler, RotateCcw, Navigation, Target } from 'lucide-react';
 
-// Leaflet Fixes
+// Leaflet Fixes for markers not showing up
 const DefaultIcon = L.icon({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
@@ -88,13 +88,12 @@ const App: React.FC = () => {
   const watchId = useRef<number | null>(null);
 
   const handlePositionUpdate = useCallback((pos: GeolocationPosition) => {
-    const now = Date.now();
     const newPoint: GeoPoint = {
       lat: pos.coords.latitude, 
       lng: pos.coords.longitude, 
       alt: pos.coords.altitude, 
       accuracy: pos.coords.accuracy, 
-      timestamp: now
+      timestamp: Date.now()
     };
 
     setCurrentPos(newPoint);
@@ -127,13 +126,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (navigator.geolocation) {
-      // First try to get cached position immediately
-      navigator.geolocation.getCurrentPosition(handlePositionUpdate, null, { enableHighAccuracy: false, maximumAge: 30000 });
+      navigator.geolocation.getCurrentPosition(handlePositionUpdate, (err) => {
+        console.warn("Initial Geo failed:", err);
+      }, { enableHighAccuracy: false, maximumAge: 60000, timeout: 5000 });
       
-      // Then start watching for high accuracy
       watchId.current = navigator.geolocation.watchPosition(
         handlePositionUpdate, 
-        (err) => console.warn("Geo error:", err),
+        (err) => console.warn("Watch Geo error:", err),
         { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
       );
     }
@@ -194,7 +193,7 @@ const App: React.FC = () => {
 
       <main className="flex-1 relative flex flex-col bg-slate-950">
         <div className="absolute inset-0 z-0 opacity-80">
-          <MapContainer center={[0,0]} zoom={3} className="w-full h-full" zoomControl={false} attributionControl={false}>
+          <MapContainer center={[0, 0]} zoom={2} className="w-full h-full" zoomControl={false} attributionControl={false}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" maxZoom={20} />
             <MapController points={mode === 'Trk' ? tracking.path : mapping.points} currentPos={currentPos} mode={mode} isTracking={tracking.isActive} />
             {currentPos && (
@@ -285,7 +284,6 @@ const App: React.FC = () => {
               {mode === 'Trk' ? (
                 <button 
                   onClick={startTrack} 
-                  disabled={!currentPos}
                   className={`w-full max-w-[280px] py-5 rounded-[2rem] font-black text-xs tracking-[0.3em] uppercase shadow-[0_20px_40px_-15px_rgba(37,99,235,0.4)] flex items-center justify-center gap-4 active:scale-95 transition-all ${!currentPos ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
                 >
                   <RotateCcw size={18} className={tracking.isActive ? 'animate-spin' : ''} />
