@@ -6,7 +6,7 @@ import { Ruler, RotateCcw, AlertTriangle, Info, X } from 'lucide-react';
 
 /** --- TYPES --- **/
 type AppMode = 'Trk' | 'Grn';
-type UnitSystem = 'Meters' | 'Yards';
+type UnitSystem = 'Metres' | 'Yards';
 type PointType = 'green' | 'bunker';
 
 interface GeoPoint {
@@ -47,8 +47,8 @@ const calculateDistance = (p1: GeoPoint, p2: GeoPoint): number => {
   return R * c;
 };
 
-const formatDist = (m: number, u: UnitSystem) => (m * (u === 'Meters' ? 1 : 1.09361)).toFixed(1);
-const formatAlt = (m: number, u: UnitSystem) => (m * (u === 'Meters' ? 1 : 3.28084)).toFixed(1);
+const formatDist = (m: number, u: UnitSystem) => (m * (u === 'Metres' ? 1 : 1.09361)).toFixed(1);
+const formatAlt = (m: number, u: UnitSystem) => (m * (u === 'Metres' ? 1 : 3.28084)).toFixed(1);
 
 const calculateArea = (points: GeoPoint[]): number => {
   if (points.length < 3) return 0;
@@ -67,9 +67,9 @@ const calculateArea = (points: GeoPoint[]): number => {
 };
 
 const getAccuracyColor = (acc: number) => {
-  if (acc < 2) return '#10b981';
-  if (acc <= 7) return '#f59e0b';
-  return '#ef4444';
+  if (acc < 2) return '#10b981'; // Green
+  if (acc <= 5) return '#f59e0b'; // Amber (2-5m per user correction)
+  return '#ef4444'; // Red
 };
 
 const getElevationSource = (altAcc: number | null) => {
@@ -120,7 +120,7 @@ const AboutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
           <p className="text-slate-400 text-[11px] leading-relaxed">
             Use this to measure shot distances. Stand at your ball, tap 'NEW TRACK', and walk to the landing spot.
             <br/><br/>
-            • <strong>DIST</strong>: Your direct horizontal distance in yards/meters.
+            • <strong>DIST</strong>: Your direct horizontal distance in yards or metres.
             <br/>
             • <strong>ELEV</strong>: Vertical change. If your device supports it, the app automatically uses barometric pressure (BARO) for high-precision elevation data.
           </p>
@@ -133,20 +133,20 @@ const AboutModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
           <p className="text-slate-400 text-[11px] leading-relaxed">
             Walk the entire perimeter of the green to calculate its total surface area and perimeter length.
             <br/><br/>
-            • <strong>Mapping</strong>: Tap 'NEW GREEN' and start walking.
+            • <strong>Mapping</strong>: Tap 'NEW GREEN' and start walking the edge.
             <br/>
-            • <strong>Close Loop</strong>: Enabled once you are within 5 yards of your starting point. Finalizes the polygon shape.
+            • <strong>Close Loop</strong>: Enabled once you are within 5 yards of your starting point. Finalises the shape.
             <br/>
-            • <strong>Bunker Analysis</strong>: While walking sections of the perimeter that touch a bunker, hold the 'HOLD FOR BUNKER' button. This highlights the segment and calculates the 'BUNKER %' of the total green boundary.
+            • <strong>Bunker Analysis</strong>: Whilst walking sections of the perimeter that touch a bunker, hold the 'HOLD FOR BUNKER' button. This highlights the segment and calculates the 'BUNKER %' of the total boundary.
           </p>
         </section>
 
         <section className="bg-blue-600/10 p-4 rounded-xl border border-blue-500/20">
           <h4 className="text-[9px] font-black text-blue-300 uppercase tracking-widest mb-1">GPS & Precision</h4>
           <p className="text-slate-500 text-[10px] leading-snug">
-            The colored ring around your position indicates GPS accuracy. 
+            The coloured ring around your position indicates GPS accuracy. 
             <span className="text-emerald-500 font-bold"> Green</span> is under 2m, 
-            <span className="text-amber-500 font-bold"> Amber</span> is 2-7m, 
+            <span className="text-amber-500 font-bold"> Amber</span> is 2-5m, 
             <span className="text-red-500 font-bold"> Red</span> is poor signal. For best results, keep the device away from your body with a clear view of the sky.
           </p>
         </section>
@@ -211,7 +211,7 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
-            // Only add points if moved more than 0.4 meters
+            // Only add points if moved more than 0.4 metres
             if (!last || calculateDistance(last, pt) >= 0.4) {
               return { 
                 ...prev, 
@@ -300,10 +300,10 @@ const App: React.FC = () => {
             className="px-3 py-1.5 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-all flex items-center gap-2"
           >
             <Info size={14} className="text-blue-400" />
-            <span className="text-[10px] font-black text-slate-300 tracking-widest">ABOUT</span>
+            <span className="text-[10px] font-black text-slate-300 tracking-widest uppercase">About</span>
           </button>
           <button 
-            onClick={() => setUnits(u => u === 'Meters' ? 'Yards' : 'Meters')} 
+            onClick={() => setUnits(u => u === 'Metres' ? 'Yards' : 'Metres')} 
             className="p-2 bg-slate-800/80 rounded-lg border border-white/10 active:scale-95 transition-transform"
           >
             <Ruler size={16} className="text-blue-400" />
