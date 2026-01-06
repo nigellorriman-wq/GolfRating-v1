@@ -72,16 +72,10 @@ const getAccuracyColor = (acc: number) => {
   return '#ef4444';
 };
 
-const getSensorSource = (accuracy: number | null) => {
-  if (accuracy === null) return "SEARCHING...";
-  if (accuracy > 25) return "NETWORK / WI-FI";
-  return "GNSS / GPS";
-};
-
 const getElevationSource = (altAcc: number | null) => {
-  if (altAcc === null) return "GNSS / GPS";
-  if (altAcc < 2.5) return "BAROMETER / FUSED";
-  return "GNSS / GPS";
+  if (altAcc === null) return "GNSS";
+  if (altAcc < 2.5) return "BARO";
+  return "GNSS";
 };
 
 /** --- MAP COMPONENTS --- **/
@@ -163,14 +157,6 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
-            const start = prev.points[0];
-            
-            // Auto-close check: if within 0.5m of start and have enough points
-            if (start && prev.points.length > 5 && calculateDistance(pt, start) < 0.5) {
-              return { ...prev, isClosed: true };
-            }
-
-            // Recording threshold: 0.4m
             if (!last || calculateDistance(last, pt) >= 0.4) {
               return { ...prev, points: [...prev.points, { ...pt, type: prev.isBunkerActive ? 'bunker' : 'green' }] };
             }
@@ -198,14 +184,20 @@ const App: React.FC = () => {
     return { perimeter, bunkerLen, area: calculateArea(grn.points), bunkerPct: perimeter > 0 ? Math.round((bunkerLen / perimeter) * 100) : 0 };
   }, [grn.points, grn.isClosed]);
 
+  const closeLoopPossible = useMemo(() => {
+    if (!grn.isActive || grn.isClosed || grn.points.length < 3 || !pos) return false;
+    const distToStart = calculateDistance(pos, grn.points[0]);
+    return distToStart <= 5.0;
+  }, [grn.isActive, grn.isClosed, grn.points, pos]);
+
   const handleNewTrackClick = () => {
     if (trk.startPoint || trk.isActive) setShowTrkConfirm(true);
     else performNewTrack();
   };
 
   const handleNewGreenClick = () => {
-    if (grn.points.length > 0) setShowGrnConfirm(true);
-    else performNewGreen();
+    if (grn.points.length > 0 && !grn.isActive) setShowGrnConfirm(true);
+    else if (!grn.isActive) performNewGreen();
   };
 
   const performNewTrack = () => {
@@ -225,7 +217,7 @@ const App: React.FC = () => {
       {showTrkConfirm && <ConfirmDialogue title="Reset Track?" message="Wipe current distance tracking and start fresh?" onConfirm={performNewTrack} onCancel={() => setShowTrkConfirm(false)} />}
       {showGrnConfirm && <ConfirmDialogue title="New Green?" message="Wipe current green mapping data?" onConfirm={performNewGreen} onCancel={() => setShowGrnConfirm(false)} />}
 
-      <header className="px-3 py-1.5 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
+      <header className="px-3 py-1 flex items-center justify-between border-b border-white/5 bg-[#0f172a]/95 backdrop-blur-xl z-[1000] shrink-0">
         <div className="flex bg-slate-800/50 p-1 rounded-xl border border-white/5">
           <button onClick={() => setMode('Trk')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Trk' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500'}`}>TRACK</button>
           <button onClick={() => setMode('Grn')} className={`px-4 py-1.5 rounded-lg text-[9px] font-black tracking-widest transition-all ${mode === 'Grn' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500'}`}>GREEN</button>
@@ -265,73 +257,93 @@ const App: React.FC = () => {
           </MapContainer>
         </div>
 
-        <div className="absolute inset-0 z-10 pointer-events-none p-2 flex flex-col justify-between">
+        <div className="absolute inset-0 z-10 pointer-events-none p-1 flex flex-col justify-between">
           <div className="pointer-events-auto">
-            <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-2 rounded-[1.2rem] border border-white/5 shadow-2xl relative flex flex-col items-center">
+            <div className="bg-slate-950/95 backdrop-blur-3xl p-1 rounded-[1.5rem] border border-white/10 shadow-2xl relative flex flex-col items-center">
               {mode === 'Trk' ? (
-                <div className="w-full flex items-center justify-around py-1">
-                  <div className="text-center flex flex-col items-center">
-                    <p className="text-slate-500 text-[8px] font-black uppercase tracking-widest leading-none mb-0.5">DISTANCE</p>
-                    <div className="flex items-baseline justify-center gap-1.5 leading-none">
-                      <div className="text-4xl font-black tabular-nums glow-text">
+                <div className="w-full flex items-center justify-around py-1 px-1">
+                  <div className="flex flex-col items-center flex-1 overflow-hidden">
+                    <div className="flex items-center gap-2 w-full px-2 justify-between">
+                       <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest shrink-0">DIST</span>
+                       <div className="text-[48px] font-black tabular-nums glow-text leading-none tracking-tighter">
                         {formatDist(currentTrackDist, units)}
-                        <span className="text-[10px] ml-0.5 font-bold opacity-40 lowercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        <span className="text-[12px] ml-1 font-bold opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                       </div>
-                      <div className="text-[11px] font-black text-slate-500 tabular-nums">±{pos ? pos.accuracy.toFixed(1) : '--'}</div>
                     </div>
-                    <div className="text-[10px] font-black text-slate-400/80 uppercase tracking-widest mt-0.5 flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-slate-700'}`} style={{backgroundColor: pos ? getAccuracyColor(pos.accuracy) : undefined}}></span>
-                      {getSensorSource(pos?.accuracy ?? null)}
+                    <div className="w-full flex justify-between px-2 items-center mt-1">
+                      <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">GNSS</span>
+                      <div className="text-[10px] font-black text-slate-400 flex items-center gap-1">
+                        <span className={`w-1 h-1 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-slate-700'}`}></span>
+                        ±{pos ? formatDist(pos.accuracy, units) : '--'}{units === 'Yards' ? 'yd' : 'm'}
+                      </div>
                     </div>
                   </div>
-                  <div className="h-12 w-[1px] bg-white/5"></div>
-                  <div className="text-center flex flex-col items-center">
-                    <p className="text-slate-500 text-[8px] font-black uppercase tracking-widest leading-none mb-0.5">ELEVATION</p>
-                    <div className="flex items-baseline justify-center gap-1.5 leading-none">
-                      <div className="text-3xl font-black tabular-nums text-amber-400">
+                  <div className="h-16 w-[1px] bg-white/10 mx-1"></div>
+                  <div className="flex flex-col items-center flex-1 overflow-hidden">
+                    <div className="flex items-center gap-2 w-full px-2 justify-between">
+                       <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest shrink-0">ELEV</span>
+                       <div className="text-[42px] font-black tabular-nums text-amber-400 leading-none tracking-tighter">
                         {trk.isActive ? `${elevDelta >= 0 ? '+' : ''}${formatAlt(elevDelta, units)}` : '0.0'}
-                        <span className="text-[10px] ml-0.5 font-bold opacity-40 lowercase">{units === 'Yards' ? 'ft' : 'm'}</span>
+                        <span className="text-[12px] ml-1 font-bold opacity-50 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
                       </div>
-                      <div className="text-[11px] font-black text-slate-500 tabular-nums">±{pos?.altAccuracy ? formatAlt(pos.altAccuracy, units) : '--'}</div>
                     </div>
-                    <div className="text-[10px] font-black text-slate-400/80 uppercase tracking-widest mt-0.5">{getElevationSource(pos?.altAccuracy ?? null)}</div>
+                    <div className="w-full flex justify-between px-2 items-center mt-1">
+                      <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">
+                        {getElevationSource(pos?.altAccuracy ?? null)}
+                      </span>
+                      <div className="text-[10px] font-black text-slate-400 uppercase">
+                        ±{pos?.altAccuracy ? formatAlt(pos.altAccuracy, units) : '--'}{units === 'Yards' ? 'ft' : 'm'}
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <div className="w-full">
+                <div className="w-full px-0.5 py-0.5">
                   {grn.isActive && !grn.isClosed && (
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-3 py-1 bg-emerald-600 rounded-full flex items-center gap-2 shadow-lg animate-pulse">
-                      <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                      <span className="text-[8px] font-black tracking-[0.2em] uppercase">MAPPING ACTIVE</span>
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-emerald-600 rounded-full flex items-center gap-2 shadow-lg animate-pulse z-20">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                      <span className="text-[9px] font-black tracking-[0.2em] uppercase">WALK THE GREEN</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-4 gap-1 w-full">
-                    <Stat label="PERIM" value={grnStats ? formatDist(grnStats.perimeter, units) : '--'} color="text-emerald-400" unit={units === 'Yards' ? 'yd' : 'm'} />
-                    <Stat label="BUNKER" value={grnStats ? formatDist(grnStats.bunkerLen, units) : '--'} color="text-amber-400" unit={units === 'Yards' ? 'yd' : 'm'} />
-                    <Stat label="PCT" value={grnStats ? `${grnStats.bunkerPct}%` : '--'} color="text-amber-500" unit="" />
-                    <Stat label="AREA" value={grnStats ? (grnStats.area * (units === 'Yards' ? 1.196 : 1)).toFixed(0) : '--'} color="text-blue-400" unit={units === 'Yards' ? 'sqyd' : 'm²'} />
+                  <div className="grid grid-cols-2 gap-0.5 w-full">
+                    <Stat label="PERIMETER" value={grnStats ? formatDist(grnStats.perimeter, units) : '--'} color="text-emerald-400" unit={units === 'Yards' ? 'yd' : 'm'} />
+                    <Stat label="BUNKER LEN" value={grnStats ? formatDist(grnStats.bunkerLen, units) : '--'} color="text-amber-400" unit={units === 'Yards' ? 'yd' : 'm'} />
+                    <Stat label="BUNKER %" value={grnStats ? `${grnStats.bunkerPct}` : '--'} color="text-amber-500" unit="%" />
+                    <Stat label="GREEN AREA" value={grnStats ? (grnStats.area * (units === 'Yards' ? 1.196 : 1)).toExponential(2) : '--'} color="text-blue-400" unit={units === 'Yards' ? 'Yd²' : 'm²'} />
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="pb-2 pointer-events-auto flex flex-col items-center gap-2">
+          <div className="pb-4 pointer-events-auto flex flex-col items-center gap-3 px-3">
             {mode === 'Trk' ? (
-              <button onClick={handleNewTrackClick} className="w-full max-w-[140px] h-9 rounded-xl font-black text-[9px] tracking-[0.1em] uppercase transition-all shadow-lg flex items-center justify-center gap-2 bg-blue-600 shadow-blue-600/20 active:scale-95">
-                <RotateCcw size={12} className={trk.isActive ? 'animate-spin' : ''} />
+              <button onClick={handleNewTrackClick} className="w-full max-w-[180px] h-11 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase transition-all shadow-xl flex items-center justify-center gap-3 bg-blue-600 shadow-blue-600/20 active:scale-95 border border-white/10">
+                <RotateCcw size={14} className={trk.isActive ? 'animate-spin' : ''} />
                 NEW TRACK
               </button>
             ) : (
-              <div className="w-full max-w-[300px] flex flex-col gap-1.5">
-                <div className="flex gap-1.5">
-                   <button onClick={handleNewGreenClick} className="flex-1 h-10 rounded-xl bg-emerald-600 font-black text-[9px] tracking-widest uppercase shadow-lg active:scale-95 transition-transform">NEW GREEN</button>
-                   <button onClick={() => setGrn(p => ({ ...p, isClosed: true }))} disabled={grn.points.length < 3 || grn.isClosed} className="flex-1 h-10 rounded-xl bg-blue-600 font-black text-[9px] tracking-widest uppercase shadow-lg disabled:opacity-30 active:scale-95 transition-transform">CLOSE LOOP</button>
+              <div className="w-full max-w-[360px] flex flex-col gap-2">
+                <div className="flex gap-2">
+                   <button 
+                    onClick={handleNewGreenClick} 
+                    className={`flex-1 h-12 rounded-2xl font-black text-[10px] tracking-widest uppercase shadow-lg transition-all border border-white/5 ${grn.isActive && !grn.isClosed ? 'bg-emerald-900 text-emerald-400' : 'bg-emerald-600 text-white active:scale-95'}`}
+                   >
+                    {grn.isActive && !grn.isClosed ? 'MAPPING...' : 'NEW GREEN'}
+                   </button>
+                   <button 
+                    onClick={() => setGrn(p => ({ ...p, isClosed: true }))} 
+                    disabled={!closeLoopPossible} 
+                    className="flex-1 h-12 rounded-2xl bg-blue-600 font-black text-[10px] tracking-widest uppercase shadow-lg disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 active:scale-95 transition-all border border-white/5"
+                   >
+                    CLOSE LOOP
+                   </button>
                 </div>
                 <button 
+                  disabled={!grn.isActive || grn.isClosed}
                   onPointerDown={() => setGrn(p => ({ ...p, isBunkerActive: true }))} 
                   onPointerUp={() => setGrn(p => ({ ...p, isBunkerActive: false }))} 
-                  className={`w-full h-12 rounded-xl font-black text-[11px] tracking-widest uppercase transition-all flex items-center justify-center gap-2 ${grn.isBunkerActive ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.5)]' : 'bg-amber-400 text-slate-900 shadow-lg'}`}
+                  className={`w-full h-14 rounded-2xl font-black text-[12px] tracking-widest uppercase transition-all flex items-center justify-center gap-3 disabled:opacity-20 disabled:bg-slate-800 disabled:text-slate-500 border border-white/5 ${grn.isBunkerActive ? 'bg-red-600 text-white shadow-[0_0_30px_rgba(239,68,68,0.6)]' : 'bg-amber-400 text-slate-900 shadow-lg'}`}
                 >
                   {grn.isBunkerActive ? 'RECORDING BUNKER' : 'HOLD FOR BUNKER'}
                 </button>
@@ -346,15 +358,27 @@ const App: React.FC = () => {
   );
 };
 
-const Stat: React.FC<{ label: string, value: string, color: string, unit: string }> = ({ label, value, color, unit }) => (
-  <div className="bg-slate-800/20 p-1 rounded-lg border border-white/5 flex flex-col items-center justify-center text-center">
-    <p className="text-slate-500 text-[6px] font-black uppercase tracking-[0.2em] mb-0.5 leading-none">{label}</p>
-    <p className={`text-sm font-black ${color} tabular-nums leading-none`}>
-      {value}
-      <span className="text-[7px] ml-0.5 opacity-50 lowercase font-bold align-top">{unit}</span>
-    </p>
-  </div>
-);
+const Stat: React.FC<{ label: string, value: string, color: string, unit: string }> = ({ label, value, color, unit }) => {
+  const renderUnit = () => {
+    if (unit === 'Yd²') return <span>Yd<sup>2</sup></span>;
+    if (unit === 'm²') return <span>m<sup>2</sup></span>;
+    return <span>{unit}</span>;
+  };
+
+  return (
+    <div className="px-2 py-1 flex items-center justify-between gap-1 overflow-hidden border-b border-white/5 last:border-0 bg-white/[0.02] rounded-lg mb-0.5">
+      <p className="text-slate-500 text-[8px] font-black uppercase tracking-tighter leading-none shrink-0">{label}</p>
+      <div className="flex items-baseline gap-1.5">
+        <span className={`text-[40px] font-black ${color} tabular-nums leading-none tracking-tighter -mb-1`}>
+          {value}
+        </span>
+        <span className="text-[11px] opacity-70 font-black text-slate-400 leading-none uppercase">
+          {renderUnit()}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 /** --- BOOTSTRAP --- **/
 const container = document.getElementById('root');
