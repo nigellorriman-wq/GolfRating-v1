@@ -62,17 +62,27 @@ const calculateArea = (points: GeoPoint[]): number => {
   return Math.abs(area) / 2;
 };
 
+// Accuracy Color Helper
+const getAccuracyColor = (acc: number) => {
+  if (acc < 2) return '#10b981'; // Green
+  if (acc <= 5) return '#f59e0b'; // Yellow
+  return '#ef4444'; // Red
+};
+
 /** --- MAP COMPONENTS --- **/
 const MapView: React.FC<{ mode: AppMode, pos: GeoPoint | null, active: boolean }> = ({ mode, pos, active }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
 
   useEffect(() => {
-    // If we have a position and haven't centered yet, or if tracking is active, snap to user
-    if (pos && (!centeredOnce.current || active)) {
-      const zoom = active ? (mode === 'Trk' ? 18 : 20) : 17;
-      map.setView([pos.lat, pos.lng], zoom, { animate: true });
-      centeredOnce.current = true;
+    if (pos) {
+      // If we haven't centered once, snap immediately to user location.
+      // If active (tracking/mapping), follow the user.
+      if (!centeredOnce.current || active) {
+        const zoom = active ? (mode === 'Trk' ? 18 : 20) : 18;
+        map.setView([pos.lat, pos.lng], zoom, { animate: true });
+        centeredOnce.current = true;
+      }
     }
   }, [pos, active, mode, map]);
 
@@ -104,7 +114,7 @@ const App: React.FC = () => {
         if (trk.isActive) {
           setTrk(prev => {
             const last = prev.path[prev.path.length - 1];
-            if (last && calculateDistance(last, pt) < 0.3) return prev;
+            if (last && calculateDistance(last, pt) < 0.2) return prev;
             return {
               ...prev, 
               path: [...prev.path, pt], 
@@ -118,7 +128,7 @@ const App: React.FC = () => {
         if (grn.isActive && !grn.isClosed) {
           setGrn(prev => {
             const last = prev.points[prev.points.length - 1];
-            if (!last || calculateDistance(last, pt) >= 0.5) {
+            if (!last || calculateDistance(last, pt) >= 0.4) {
               return { ...prev, points: [...prev.points, { ...pt, type: prev.isBunkerActive ? 'bunker' : 'green' }] };
             }
             return prev;
@@ -150,7 +160,7 @@ const App: React.FC = () => {
     };
   }, [grn.points, grn.isClosed]);
 
-  // Automatic Splash Cleanup
+  // Splash Cleanup
   useEffect(() => {
     const splash = document.getElementById('splash');
     if (splash) {
@@ -177,7 +187,7 @@ const App: React.FC = () => {
         </button>
       </header>
 
-      {/* MAP AREA - ALWAYS RENDERS */}
+      {/* MAP AREA */}
       <main className="flex-1 relative overflow-hidden bg-slate-950">
         <div className="absolute inset-0 z-0 h-full w-full">
           <MapContainer center={[0,0]} zoom={2} className="h-full w-full" zoomControl={false} attributionControl={false}>
@@ -186,8 +196,8 @@ const App: React.FC = () => {
             
             {pos && (
               <>
-                <CircleMarker center={[pos.lat, pos.lng]} radius={8} pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1, weight: 3, stroke: true }} />
-                <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ fillColor: pos.accuracy < 10 ? '#10b981' : '#f59e0b', fillOpacity: 0.1, stroke: false }} />
+                <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2, stroke: true }} />
+                <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ fillColor: getAccuracyColor(pos.accuracy), fillOpacity: 0.15, weight: 1, color: getAccuracyColor(pos.accuracy), opacity: 0.3 }} />
               </>
             )}
 
@@ -211,9 +221,9 @@ const App: React.FC = () => {
           <div className="pointer-events-auto">
             <div className="bg-[#0f172a]/95 backdrop-blur-2xl p-6 rounded-[2.5rem] border border-white/5 shadow-2xl relative">
               <div className="absolute top-3 right-6 flex items-center gap-2">
-                 <div className={`w-2 h-2 rounded-full ${pos ? (pos.accuracy < 10 ? 'bg-emerald-500' : 'bg-amber-500') : 'bg-red-500 animate-pulse'}`}></div>
+                 <div className={`w-2 h-2 rounded-full ${pos ? (pos.accuracy < 2 ? 'bg-emerald-500' : pos.accuracy <= 5 ? 'bg-amber-500' : 'bg-red-500') : 'bg-slate-700 animate-pulse'}`}></div>
                  <span className="text-[10px] font-black text-slate-400 opacity-80 uppercase tracking-tighter">
-                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'SEARCHING GPS...'}
+                   {pos ? `±${pos.accuracy.toFixed(1)}m` : 'WAITING FOR GPS...'}
                  </span>
               </div>
 
