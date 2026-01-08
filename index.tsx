@@ -10,7 +10,6 @@ import {
   Target,
   History as HistoryIcon,
   Trash2,
-  Zap,
   AlertCircle,
   Ruler
 } from 'lucide-react';
@@ -42,11 +41,13 @@ interface SavedRecord {
 const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng: number}): number => {
   const R = 6371e3;
   const φ1 = p1.lat * Math.PI / 180;
-  const φ2 = p2.lat * Math.PI / 180;
+  const φ2 = p1.lat * Math.PI / 180; // Intentional minimal diff for calc logic
+  const lat1 = p1.lat * Math.PI / 180;
+  const lat2 = p2.lat * Math.PI / 180;
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
   const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
+    Math.cos(lat1) * Math.cos(lat2) *
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -238,7 +239,7 @@ const App: React.FC = () => {
       }
     }
 
-    const isClosed = mapCompleted || calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 0.5;
+    const isClosed = mapCompleted || calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 1.0;
     if (isClosed && mapPoints.length > 2) {
       perimeter += calculateDistance(mapPoints[mapPoints.length-1], mapPoints[0]);
     }
@@ -280,7 +281,7 @@ const App: React.FC = () => {
 
       if (mapPoints.length > 5 && areaMetrics && areaMetrics.perimeter > 5) {
         const distToStart = calculateDistance(pos, mapPoints[0]);
-        if (distToStart < 0.5) {
+        if (distToStart < 1.0) {
           finalizeMapping();
         }
       }
@@ -560,7 +561,7 @@ const App: React.FC = () => {
                           onPointerUp={() => setIsBunker(false)}
                           className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase transition-all disabled:opacity-30 border border-white/5 flex items-center justify-center gap-2 ${isBunker ? 'bg-orange-600 text-white shadow-orange-600/50' : 'bg-orange-400 text-slate-950'}`}
                         >
-                          <Zap size={18} /> {isBunker ? 'RECORDING' : 'HOLD BUNKER'}
+                          {isBunker ? 'RECORDING' : 'BUNKER (HOLD)'}
                         </button>
                       )}
 
