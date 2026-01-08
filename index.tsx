@@ -474,10 +474,25 @@ const App: React.FC = () => {
             <div className="flex flex-col gap-4 w-full max-w-sm">
               {view === 'shot' ? (
                 <>
+                  <div className="pointer-events-auto flex justify-center">
+                    <button 
+                      onClick={() => {
+                        if (!trkActive) {
+                          setTrkActive(true);
+                          setTrkStart(pos);
+                        } else {
+                          setShowEndConfirm(true);
+                        }
+                      }}
+                      className={`w-full h-16 rounded-3xl font-black text-[10px] tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
+                    >
+                      <Navigation2 size={18} /> {trkActive ? 'End Tracking' : 'Start new track'}
+                    </button>
+                  </div>
                   <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full shadow-2xl">
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                        <FitText maxFontSize={28} className="font-black text-white uppercase tracking-tighter mb-1">
+                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
                           GNSS ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Hz Distance</span>
@@ -488,7 +503,7 @@ const App: React.FC = () => {
                       </div>
                       <div className="h-20 w-px bg-white/10 shrink-0"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                        <FitText maxFontSize={28} className="font-black text-white uppercase tracking-tighter mb-1">
+                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
                           WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
@@ -498,21 +513,6 @@ const App: React.FC = () => {
                         </FitText>
                       </div>
                     </div>
-                  </div>
-                  <div className="pointer-events-auto pb-2">
-                    <button 
-                      onClick={() => {
-                        if (!trkActive) {
-                          setTrkActive(true);
-                          setTrkStart(pos);
-                        } else {
-                          setShowEndConfirm(true);
-                        }
-                      }}
-                      className={`w-full h-32 rounded-[3.5rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
-                    >
-                      <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Start new track'}
-                    </button>
                   </div>
                 </>
               ) : (
@@ -595,7 +595,7 @@ const App: React.FC = () => {
                     <div className="flex items-center justify-center gap-3 py-2 bg-white/[0.02] border-t border-white/5">
                       <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
                       <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                        Signal Quality: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
+                        Hz Accuracy: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
                       </span>
                     </div>
                   </div>
