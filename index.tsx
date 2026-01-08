@@ -90,9 +90,8 @@ const FitText: React.FC<{ children: React.ReactNode; className?: string; maxFont
     let currentSize = maxFontSize;
     textRef.current.style.fontSize = `${currentSize}px`;
     
-    // Iteratively shrink font size until it fits within parent container width
     const maxWidth = containerRef.current.clientWidth;
-    while (textRef.current.scrollWidth > maxWidth && currentSize > 10) {
+    while (textRef.current.scrollWidth > maxWidth && currentSize > 8) {
       currentSize -= 1;
       textRef.current.style.fontSize = `${currentSize}px`;
     }
@@ -118,7 +117,12 @@ const FitText: React.FC<{ children: React.ReactNode; className?: string; maxFont
   );
 };
 
-const MapController: React.FC<{ pos: GeoPoint | null, active: boolean }> = ({ pos, active }) => {
+const MapController: React.FC<{ 
+  pos: GeoPoint | null, 
+  active: boolean, 
+  mapPoints: GeoPoint[], 
+  completed: boolean 
+}> = ({ pos, active, mapPoints, completed }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
 
@@ -128,13 +132,20 @@ const MapController: React.FC<{ pos: GeoPoint | null, active: boolean }> = ({ po
   }, [map]);
 
   useEffect(() => {
-    if (pos) {
-      if (!centeredOnce.current || active) {
-        map.setView([pos.lat, pos.lng], 19, { animate: true });
-        centeredOnce.current = true;
-      }
+    if (completed && mapPoints.length > 2) {
+      const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
+      map.fitBounds(bounds, { padding: [50, 50], animate: true });
+      return;
     }
-  }, [pos, active, map]);
+
+    if (pos && active) {
+      map.setView([pos.lat, pos.lng], 19, { animate: true });
+      centeredOnce.current = true;
+    } else if (pos && !centeredOnce.current) {
+      map.setView([pos.lat, pos.lng], 19, { animate: true });
+      centeredOnce.current = true;
+    }
+  }, [pos, active, map, completed, mapPoints]);
 
   return null;
 };
@@ -154,6 +165,7 @@ const App: React.FC = () => {
 
   // Mapping State
   const [mapActive, setMapActive] = useState(false);
+  const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
   const [isBunker, setIsBunker] = useState(false);
 
@@ -180,6 +192,49 @@ const App: React.FC = () => {
     return () => navigator.geolocation.clearWatch(watch);
   }, []);
 
+  const areaMetrics = useMemo(() => {
+    if (mapPoints.length < 2) return null;
+    let perimeter = 0;
+    let bunkerLength = 0;
+
+    for (let i = 0; i < mapPoints.length - 1; i++) {
+      const dist = calculateDistance(mapPoints[i], mapPoints[i+1]);
+      perimeter += dist;
+      if (mapPoints[i+1].type === 'bunker') {
+        bunkerLength += dist;
+      }
+    }
+
+    const isClosed = mapCompleted || calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 0.5;
+    if (isClosed && mapPoints.length > 2) {
+      perimeter += calculateDistance(mapPoints[mapPoints.length-1], mapPoints[0]);
+    }
+
+    const bunkerPct = perimeter > 0 ? Math.round((bunkerLength / perimeter) * 100) : 0;
+
+    return { area: calculateArea(mapPoints), perimeter, bunkerLength, bunkerPct };
+  }, [mapPoints, mapCompleted]);
+
+  const saveRecord = useCallback((record: Omit<SavedRecord, 'id' | 'date'>) => {
+    const newRecord: SavedRecord = { ...record, id: Math.random().toString(36).substr(2, 9), date: Date.now() };
+    const updated = [newRecord, ...history].slice(0, 10);
+    setHistory(updated);
+    localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
+  }, [history]);
+
+  const finalizeMapping = useCallback(() => {
+    if (areaMetrics) {
+      saveRecord({
+        type: 'Map',
+        primaryValue: Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) + (units === 'Yards' ? 'yd²' : 'm²'),
+        secondaryValue: `Bunker: ${areaMetrics.bunkerPct}%`,
+        points: mapPoints
+      });
+    }
+    setMapActive(false);
+    setMapCompleted(true);
+  }, [areaMetrics, mapPoints, units, saveRecord]);
+
   useEffect(() => {
     if (mapActive && pos) {
       setMapPoints(prev => {
@@ -189,15 +244,15 @@ const App: React.FC = () => {
         }
         return prev;
       });
-    }
-  }, [pos, mapActive, isBunker]);
 
-  const saveRecord = useCallback((record: Omit<SavedRecord, 'id' | 'date'>) => {
-    const newRecord: SavedRecord = { ...record, id: Math.random().toString(36).substr(2, 9), date: Date.now() };
-    const updated = [newRecord, ...history].slice(0, 10);
-    setHistory(updated);
-    localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
-  }, [history]);
+      if (mapPoints.length > 5 && areaMetrics && areaMetrics.perimeter > 5) {
+        const distToStart = calculateDistance(pos, mapPoints[0]);
+        if (distToStart < 0.5) {
+          finalizeMapping();
+        }
+      }
+    }
+  }, [pos, mapActive, isBunker, areaMetrics, finalizeMapping]);
 
   const deleteHistory = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -210,16 +265,6 @@ const App: React.FC = () => {
   const elevDelta = (pos && trkStart && pos.alt !== null && trkStart.alt !== null) 
     ? (pos.alt - trkStart.alt) 
     : 0;
-
-  const areaMetrics = useMemo(() => {
-    if (mapPoints.length < 3) return null;
-    let perimeter = 0;
-    for (let i = 0; i < mapPoints.length - 1; i++) {
-      perimeter += calculateDistance(mapPoints[i], mapPoints[i+1]);
-    }
-    perimeter += calculateDistance(mapPoints[mapPoints.length-1], mapPoints[0]);
-    return { area: calculateArea(mapPoints), perimeter };
-  }, [mapPoints]);
 
   const confirmEndTrack = () => {
     saveRecord({
@@ -276,7 +321,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => setView('map')}
+              onClick={() => { setView('map'); setMapCompleted(false); setMapPoints([]); }}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -330,7 +375,7 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none">
             <div className="flex justify-between items-start">
               <button 
-                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setShowEndConfirm(false); }}
+                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setShowEndConfirm(false); }}
                 className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
               >
                 <ChevronLeft size={20} className="text-emerald-400" />
@@ -361,7 +406,12 @@ const App: React.FC = () => {
                 maxZoom={22} 
                 maxNativeZoom={19} 
               />
-              <MapController pos={pos} active={trkActive || mapActive} />
+              <MapController 
+                pos={pos} 
+                active={trkActive || mapActive} 
+                mapPoints={mapPoints} 
+                completed={mapCompleted} 
+              />
               
               {pos && (
                 <>
@@ -384,112 +434,137 @@ const App: React.FC = () => {
                     const prev = arr[i - 1];
                     return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
                   })}
-                  {mapPoints.length > 2 && !mapActive && <Polygon positions={mapPoints.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />}
+                  {mapPoints.length > 2 && (mapCompleted || !mapActive) && (
+                    <Polygon positions={mapPoints.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
+                  )}
                 </>
               )}
             </MapContainer>
           </main>
 
           <div className="absolute inset-x-0 bottom-0 z-[1000] p-4 pointer-events-none flex flex-col gap-4 items-center">
-            <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full max-w-sm shadow-2xl">
+            <div className="flex flex-col gap-4 w-full max-w-sm">
               {view === 'shot' ? (
-                <div className="flex items-center justify-around gap-2">
-                  <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block -mb-0.5 opacity-90 whitespace-nowrap">
-                      GNSS ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
-                    </span>
-                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block mb-0.5 opacity-40">Hz Distance</span>
-                    <FitText maxFontSize={42} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
-                      {formatDist(currentShotDist, units)}
-                      <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                    </FitText>
-                  </div>
-                  <div className="h-14 w-px bg-white/10 shrink-0"></div>
-                  <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block -mb-0.5 opacity-90 whitespace-nowrap">
-                      WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
-                    </span>
-                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block mb-0.5 opacity-40">Elev change</span>
-                    <FitText maxFontSize={42} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
-                      {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
-                      <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
-                    </FitText>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 p-1">
-                  <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">AREA</span>
-                    <div className="text-3xl font-black text-emerald-400 tabular-nums">
-                      {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
-                      <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
+                <>
+                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full shadow-2xl">
+                    <div className="flex items-center justify-around gap-2">
+                      <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+                        <FitText maxFontSize={28} className="font-black text-white uppercase tracking-tighter mb-1">
+                          GNSS ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
+                        </FitText>
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Hz Distance</span>
+                        <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
+                          {formatDist(currentShotDist, units)}
+                          <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        </FitText>
+                      </div>
+                      <div className="h-20 w-px bg-white/10 shrink-0"></div>
+                      <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+                        <FitText maxFontSize={28} className="font-black text-white uppercase tracking-tighter mb-1">
+                          WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
+                        </FitText>
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
+                        <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
+                          {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
+                          <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
+                        </FitText>
+                      </div>
                     </div>
                   </div>
-                  <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">WALKED</span>
-                    <div className="text-3xl font-black text-blue-400 tabular-nums">
-                      {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
-                      <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="pointer-events-auto flex flex-col gap-3 w-full max-w-sm pb-2">
-              {view === 'shot' ? (
-                <button 
-                  onClick={() => {
-                    if (!trkActive) {
-                      setTrkActive(true);
-                      setTrkStart(pos);
-                    } else {
-                      setShowEndConfirm(true);
-                    }
-                  }}
-                  className={`flex-1 h-32 rounded-[3.5rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
-                >
-                  <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Start new track'}
-                </button>
-              ) : (
-                <div className="flex flex-col gap-3 w-full pb-8">
-                  <div className="flex gap-3">
+                  <div className="pointer-events-auto pb-2">
                     <button 
                       onClick={() => {
-                        if (!mapActive) {
-                          setMapPoints(pos ? [pos] : []);
-                          setMapActive(true);
+                        if (!trkActive) {
+                          setTrkActive(true);
+                          setTrkStart(pos);
                         } else {
-                          if (areaMetrics) {
-                            saveRecord({
-                              type: 'Map',
-                              primaryValue: Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) + (units === 'Yards' ? 'yd²' : 'm²'),
-                              secondaryValue: formatDist(areaMetrics.perimeter, units) + (units === 'Yards' ? 'yd' : 'm'),
-                              points: mapPoints
-                            });
-                          }
-                          setMapActive(false);
+                          setShowEndConfirm(true);
                         }
                       }}
-                      className={`flex-[2] h-16 rounded-[2.2rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 transition-all flex items-center justify-center gap-4 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
+                      className={`w-full h-32 rounded-[3.5rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                     >
-                      {mapActive ? 'End Mapping' : 'Start Feature'}
+                      <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Start new track'}
                     </button>
-                    {mapActive && (
-                      <button onClick={() => setMapPoints([])} className="w-16 h-16 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400">
-                        <RotateCcw size={22} />
-                      </button>
-                    )}
                   </div>
-                  <button 
-                    disabled={!mapActive}
-                    onPointerDown={() => setIsBunker(true)} 
-                    onPointerUp={() => setIsBunker(false)}
-                    className={`h-16 rounded-[2.2rem] font-black text-xs tracking-[0.3em] uppercase transition-all disabled:opacity-30 border border-white/5 flex items-center justify-center gap-4 ${isBunker ? 'bg-orange-600 text-white shadow-orange-600/50' : 'bg-orange-400 text-slate-950'}`}
-                  >
-                    <Zap size={22} /> {isBunker ? 'Bunker Recorded' : 'Hold for Bunker'}
-                  </button>
-                </div>
+                </>
+              ) : (
+                <>
+                  <div className="pointer-events-auto">
+                    <div className="flex gap-2 w-full">
+                      <button 
+                        onClick={() => {
+                          if (mapCompleted) {
+                            setMapPoints([]);
+                            setMapCompleted(false);
+                            setMapActive(false);
+                            return;
+                          }
+
+                          if (!mapActive) {
+                            setMapPoints(pos ? [pos] : []);
+                            setMapActive(true);
+                            setMapCompleted(false);
+                          } else {
+                            finalizeMapping();
+                          }
+                        }}
+                        className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase border border-white/10 transition-all flex items-center justify-center gap-2 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'} ${mapCompleted ? 'bg-slate-800' : ''}`}
+                      >
+                        {mapCompleted ? 'NEW FEATURE' : (mapActive ? 'CLOSE FEATURE' : 'START FEATURE')}
+                      </button>
+                      
+                      {!mapCompleted && (
+                        <button 
+                          disabled={!mapActive}
+                          onPointerDown={() => setIsBunker(true)} 
+                          onPointerUp={() => setIsBunker(false)}
+                          className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase transition-all disabled:opacity-30 border border-white/5 flex items-center justify-center gap-2 ${isBunker ? 'bg-orange-600 text-white shadow-orange-600/50' : 'bg-orange-400 text-slate-950'}`}
+                        >
+                          <Zap size={18} /> {isBunker ? 'RECORDING' : 'HOLD BUNKER'}
+                        </button>
+                      )}
+
+                      {mapActive && (
+                        <button onClick={() => setMapPoints([])} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
+                          <RotateCcw size={20} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3 w-full shadow-2xl">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">AREA</span>
+                        <div className="text-3xl font-black text-emerald-400 tabular-nums">
+                          {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
+                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">WALKED</span>
+                        <div className="text-3xl font-black text-blue-400 tabular-nums">
+                          {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
+                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">BUNKER LEN</span>
+                        <div className="text-3xl font-black text-orange-400 tabular-nums">
+                          {areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--'}
+                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">BUNKER %</span>
+                        <div className="text-3xl font-black text-amber-500 tabular-nums">
+                          {areaMetrics ? areaMetrics.bunkerPct : '--'}
+                          <span className="text-[14px] ml-0.5 opacity-50">%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
