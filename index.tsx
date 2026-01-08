@@ -24,6 +24,7 @@ interface GeoPoint {
   lng: number;
   alt: number | null;
   accuracy: number;
+  altAccuracy: number | null;
   timestamp: number;
   type?: 'green' | 'bunker';
 }
@@ -128,6 +129,7 @@ const App: React.FC = () => {
           lng: p.coords.longitude, 
           alt: p.coords.altitude, 
           accuracy: p.coords.accuracy, 
+          altAccuracy: p.coords.altitudeAccuracy,
           timestamp: Date.now()
         };
         setPos(pt);
@@ -349,19 +351,25 @@ const App: React.FC = () => {
           </main>
 
           <div className="absolute inset-x-0 bottom-0 z-[1000] p-4 pointer-events-none flex flex-col gap-4 items-center">
-            <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 w-full max-w-sm shadow-2xl">
+            <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full max-w-sm shadow-2xl">
               {view === 'shot' ? (
                 <div className="flex items-center justify-around">
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Hz Distance</span>
+                    <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-tighter block -mb-0.5">
+                      GNSS L1/L5 ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
+                    </span>
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-0.5">Hz Distance</span>
                     <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                       {formatDist(currentShotDist, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                     </div>
                   </div>
-                  <div className="h-12 w-px bg-white/10 mx-2"></div>
+                  <div className="h-14 w-px bg-white/10 mx-1"></div>
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Elev change</span>
+                    <span className="text-[10px] font-black text-amber-400/60 uppercase tracking-tighter block -mb-0.5">
+                      WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
+                    </span>
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-0.5">Elev change</span>
                     <div className="text-[32px] font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                       {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
@@ -369,15 +377,15 @@ const App: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5 text-center">
+                <div className="grid grid-cols-2 gap-3 p-1">
+                  <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
                     <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">AREA</span>
                     <div className="text-3xl font-black text-emerald-400 tabular-nums">
                       {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
                       <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
                     </div>
                   </div>
-                  <div className="bg-white/[0.03] p-4 rounded-3xl border border-white/5 text-center">
+                  <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
                     <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">WALKED</span>
                     <div className="text-3xl font-black text-blue-400 tabular-nums">
                       {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
