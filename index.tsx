@@ -262,7 +262,7 @@ const App: React.FC = () => {
 
   const saveRecord = useCallback((record: Omit<SavedRecord, 'id' | 'date'>) => {
     const newRecord: SavedRecord = { ...record, id: Math.random().toString(36).substr(2, 9), date: Date.now() };
-    const updated = [newRecord, ...history].slice(0, 10);
+    const updated = [newRecord, ...history]; // Removed .slice(0, 10) to make history unlimited
     setHistory(updated);
     localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
   }, [history]);
@@ -400,7 +400,7 @@ const App: React.FC = () => {
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3 px-2">
                   <HistoryIcon size={14} className="text-slate-600" />
-                  <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Recent Stats</span>
+                  <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Session History</span>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
@@ -633,7 +633,7 @@ const App: React.FC = () => {
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
                         <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
-                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--')}
+                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--')}
                           <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>

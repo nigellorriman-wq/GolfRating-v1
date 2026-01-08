@@ -262,7 +262,7 @@ const App: React.FC = () => {
 
   const saveRecord = useCallback((record: Omit<SavedRecord, 'id' | 'date'>) => {
     const newRecord: SavedRecord = { ...record, id: Math.random().toString(36).substr(2, 9), date: Date.now() };
-    const updated = [newRecord, ...history].slice(0, 10);
+    const updated = [newRecord, ...history];
     setHistory(updated);
     localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
   }, [history]);
@@ -400,7 +400,7 @@ const App: React.FC = () => {
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3 px-2">
                   <HistoryIcon size={14} className="text-slate-600" />
-                  <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Recent Stats</span>
+                  <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Session History</span>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
