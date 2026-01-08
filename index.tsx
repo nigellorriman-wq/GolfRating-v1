@@ -125,6 +125,7 @@ const MapController: React.FC<{
 }> = ({ pos, active, mapPoints, completed }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
+  const fittedCompleted = useRef(false);
 
   useEffect(() => {
     const interval = setInterval(() => map.invalidateSize(), 1000);
@@ -132,16 +133,25 @@ const MapController: React.FC<{
   }, [map]);
 
   useEffect(() => {
+    if (active) {
+      fittedCompleted.current = false;
+    }
+  }, [active]);
+
+  useEffect(() => {
     if (completed && mapPoints.length > 2) {
-      const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
-      map.fitBounds(bounds, { padding: [50, 50], animate: true });
-      return;
+      if (!fittedCompleted.current) {
+        const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
+        map.fitBounds(bounds, { padding: [50, 50], animate: true });
+        fittedCompleted.current = true;
+      }
+      return; 
     }
 
-    if (pos && active) {
+    if (pos && active && !completed) {
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
-    } else if (pos && !centeredOnce.current) {
+    } else if (pos && !centeredOnce.current && !completed) {
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
     }
@@ -149,6 +159,28 @@ const MapController: React.FC<{
 
   return null;
 };
+
+const ConfirmDialogue: React.FC<{ 
+  title: string, 
+  message: string, 
+  onConfirm: () => void, 
+  onCancel: () => void,
+  confirmLabel?: string
+}> = ({ title, message, onConfirm, onCancel, confirmLabel = "Confirm" }) => (
+  <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="bg-[#0f172a] w-full max-w-xs rounded-[2rem] border border-white/10 p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
+      <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
+        <AlertCircle size={24} className="text-amber-500" />
+      </div>
+      <h3 className="text-lg font-black uppercase italic mb-2 tracking-tight">{title}</h3>
+      <p className="text-slate-400 text-xs leading-relaxed mb-6 font-medium">{message}</p>
+      <div className="flex flex-col gap-2 text-white">
+        <button onClick={onConfirm} className="w-full py-3.5 bg-blue-600 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase shadow-lg active:scale-95 transition-all">{confirmLabel}</button>
+        <button onClick={onCancel} className="w-full py-3.5 bg-slate-800 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase text-slate-400 active:scale-95 transition-all">Cancel</button>
+      </div>
+    </div>
+  </div>
+);
 
 /** --- MAIN APP --- **/
 const App: React.FC = () => {
@@ -168,6 +200,7 @@ const App: React.FC = () => {
   const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
   const [isBunker, setIsBunker] = useState(false);
+  const [showMapRestartConfirm, setShowMapRestartConfirm] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('golf_pro_caddy_final');
@@ -283,19 +316,26 @@ const App: React.FC = () => {
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
 
       {showEndConfirm && (
-        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0f172a] w-full max-w-xs rounded-[2rem] border border-white/10 p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
-            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
-              <AlertCircle size={24} className="text-amber-500" />
-            </div>
-            <h3 className="text-lg font-black uppercase italic mb-2">End current track?</h3>
-            <p className="text-slate-400 text-xs leading-relaxed mb-6 font-medium">This will stop tracking and save the current distance measurement to your history.</p>
-            <div className="flex flex-col gap-2">
-              <button onClick={confirmEndTrack} className="w-full py-3.5 bg-blue-600 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase text-white shadow-lg active:scale-95 transition-all">Confirm & Save</button>
-              <button onClick={() => setShowEndConfirm(false)} className="w-full py-3.5 bg-slate-800 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase text-slate-400 active:scale-95 transition-all">Cancel</button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialogue 
+          title="End Track?" 
+          message="This will stop tracking and save the current distance measurement to your history."
+          onConfirm={confirmEndTrack}
+          onCancel={() => setShowEndConfirm(false)}
+          confirmLabel="Confirm & Save"
+        />
+      )}
+
+      {showMapRestartConfirm && (
+        <ConfirmDialogue 
+          title="Restart Mapper?" 
+          message="This will clear all currently walked points. This action cannot be undone."
+          onConfirm={() => {
+            setMapPoints([]);
+            setShowMapRestartConfirm(false);
+          }}
+          onCancel={() => setShowMapRestartConfirm(false)}
+          confirmLabel="Clear Points"
+        />
       )}
 
       {view === 'landing' ? (
@@ -413,7 +453,7 @@ const App: React.FC = () => {
                 completed={mapCompleted} 
               />
               
-              {pos && (
+              {pos && (view !== 'map' || !mapCompleted) && (
                 <>
                   <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ color: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, opacity: 0.2 }} />
                   <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2.5 }} />
@@ -525,41 +565,41 @@ const App: React.FC = () => {
                       )}
 
                       {mapActive && (
-                        <button onClick={() => setMapPoints([])} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
+                        <button onClick={() => setShowMapRestartConfirm(true)} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
                           <RotateCcw size={20} />
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3 w-full shadow-2xl">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">AREA</span>
-                        <div className="text-3xl font-black text-emerald-400 tabular-nums">
+                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-1 w-full shadow-2xl">
+                    <div className="grid grid-cols-2 gap-1">
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">AREA</span>
+                        <div className="text-2xl font-black text-emerald-400 tabular-nums leading-none">
                           {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
-                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
                         </div>
                       </div>
-                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">WALKED</span>
-                        <div className="text-3xl font-black text-blue-400 tabular-nums">
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">WALKED</span>
+                        <div className="text-2xl font-black text-blue-400 tabular-nums leading-none">
                           {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
-                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>
-                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">BUNKER LEN</span>
-                        <div className="text-3xl font-black text-orange-400 tabular-nums">
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
+                        <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
                           {areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--'}
-                          <span className="text-[10px] ml-1 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>
-                      <div className="bg-white/[0.03] p-3 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[9px] font-black uppercase block mb-1 tracking-widest">BUNKER %</span>
-                        <div className="text-3xl font-black text-amber-500 tabular-nums">
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER %</span>
+                        <div className="text-2xl font-black text-amber-500 tabular-nums leading-none">
                           {areaMetrics ? areaMetrics.bunkerPct : '--'}
-                          <span className="text-[14px] ml-0.5 opacity-50">%</span>
+                          <span className="text-[12px] ml-0.5 opacity-50">%</span>
                         </div>
                       </div>
                     </div>
