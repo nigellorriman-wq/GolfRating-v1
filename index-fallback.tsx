@@ -11,7 +11,8 @@ import {
   History as HistoryIcon,
   Trash2,
   AlertCircle,
-  Ruler
+  Ruler,
+  Eye
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -120,8 +121,9 @@ const MapController: React.FC<{
   pos: GeoPoint | null, 
   active: boolean, 
   mapPoints: GeoPoint[], 
-  completed: boolean 
-}> = ({ pos, active, mapPoints, completed }) => {
+  completed: boolean,
+  viewingRecord: SavedRecord | null
+}> = ({ pos, active, mapPoints, completed, viewingRecord }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
   const fittedCompleted = useRef(false);
@@ -138,6 +140,12 @@ const MapController: React.FC<{
   }, [active]);
 
   useEffect(() => {
+    if (viewingRecord && viewingRecord.points.length > 0) {
+      const bounds = L.latLngBounds(viewingRecord.points.map(p => [p.lat, p.lng]));
+      map.fitBounds(bounds, { padding: [50, 50], animate: true });
+      return;
+    }
+
     if (completed && mapPoints.length > 2) {
       if (!fittedCompleted.current) {
         const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
@@ -154,7 +162,7 @@ const MapController: React.FC<{
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
     }
-  }, [pos, active, map, completed, mapPoints]);
+  }, [pos, active, map, completed, mapPoints, viewingRecord]);
 
   return null;
 };
@@ -171,7 +179,7 @@ const ConfirmDialogue: React.FC<{
       <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
         <AlertCircle size={24} className="text-amber-500" />
       </div>
-      <h3 className="text-lg font-black uppercase italic mb-2 tracking-tight">{title}</h3>
+      <h3 className="text-lg font-black uppercase italic mb-2 tracking-tight text-white">{title}</h3>
       <p className="text-slate-400 text-xs leading-relaxed mb-6 font-medium">{message}</p>
       <div className="flex flex-col gap-2 text-white">
         <button onClick={onConfirm} className="w-full py-3.5 bg-blue-600 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase shadow-lg active:scale-95 transition-all">{confirmLabel}</button>
@@ -188,13 +196,12 @@ const App: React.FC = () => {
   const [mapStyle, setMapStyle] = useState<'Street' | 'Satellite'>('Satellite');
   const [pos, setPos] = useState<GeoPoint | null>(null);
   const [history, setHistory] = useState<SavedRecord[]>([]);
+  const [viewingRecord, setViewingRecord] = useState<SavedRecord | null>(null);
 
-  // Track State
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  // Green State
   const [mapActive, setMapActive] = useState(false);
   const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
@@ -297,6 +304,7 @@ const App: React.FC = () => {
     const updated = history.filter(h => h.id !== id);
     setHistory(updated);
     localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
+    if (viewingRecord?.id === id) setViewingRecord(null);
   };
 
   const currentShotDist = (trkStart && pos) ? calculateDistance(trkStart, pos) : 0;
@@ -318,6 +326,11 @@ const App: React.FC = () => {
     setShowEndConfirm(false);
   };
 
+  const handleHistoryClick = (record: SavedRecord) => {
+    setViewingRecord(record);
+    setView(record.type === 'Track' ? 'track' : 'green');
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
@@ -325,7 +338,7 @@ const App: React.FC = () => {
       {showEndConfirm && (
         <ConfirmDialogue 
           title="End Track?" 
-          message="This will stop tracking and save the current distance measurement to your history."
+          message="This will stop tracking and save the current distance measurement."
           onConfirm={confirmEndTrack}
           onCancel={() => setShowEndConfirm(false)}
           confirmLabel="Confirm & Save"
@@ -334,14 +347,14 @@ const App: React.FC = () => {
 
       {showMapRestartConfirm && (
         <ConfirmDialogue 
-          title="Restart Mapper?" 
-          message="This will clear all currently walked points. This action cannot be undone."
+          title="Restart?" 
+          message="This will clear all currently walked points."
           onConfirm={() => {
             setMapPoints([]);
             setShowMapRestartConfirm(false);
           }}
           onCancel={() => setShowMapRestartConfirm(false)}
-          confirmLabel="Clear Points"
+          confirmLabel="Clear"
         />
       )}
 
@@ -354,7 +367,7 @@ const App: React.FC = () => {
 
           <div className="flex flex-col gap-4">
             <button 
-              onClick={() => setView('track')}
+              onClick={() => { setView('track'); setViewingRecord(null); }}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -368,7 +381,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => { setView('green'); setMapCompleted(false); setMapPoints([]); }}
+              onClick={() => { setView('green'); setMapCompleted(false); setMapPoints([]); setViewingRecord(null); }}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -391,17 +404,23 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
-                    <div key={item.id} className="relative shrink-0">
-                      <div className="bg-slate-900/50 border border-white/5 px-5 py-4 rounded-2xl flex flex-col min-w-[170px] shadow-sm">
-                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1 tracking-[0.2em]">
-                          {item.type === 'Track' ? 'TRACK' : 'GREEN'}
-                        </span>
+                    <div key={item.id} className="relative shrink-0 group">
+                      <button 
+                        onClick={() => handleHistoryClick(item)}
+                        className="bg-slate-900/50 border border-white/5 px-5 py-4 rounded-2xl flex flex-col min-w-[170px] shadow-sm active:bg-slate-800 transition-all text-left"
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-[7px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                            {item.type === 'Track' ? 'TRACK' : 'GREEN'}
+                          </span>
+                          <Eye size={10} className="text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
                         <span className="text-lg font-black tabular-nums leading-tight text-white mb-0.5">{item.primaryValue}</span>
                         {item.secondaryValue && (
                           <span className="text-[10px] font-bold text-slate-400 opacity-90">{item.secondaryValue}</span>
                         )}
-                      </div>
-                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white shadow-lg active:scale-90 transition-all">
+                      </button>
+                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white shadow-lg active:scale-90 transition-all z-10">
                         <Trash2 size={12} />
                       </button>
                     </div>
@@ -416,7 +435,7 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none">
             <div className="flex justify-between items-start">
               <button 
-                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setShowEndConfirm(false); }}
+                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setShowEndConfirm(false); setViewingRecord(null); }}
                 className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
               >
                 <ChevronLeft size={20} className="text-emerald-400" />
@@ -451,24 +470,44 @@ const App: React.FC = () => {
                 pos={pos} 
                 active={trkActive || mapActive} 
                 mapPoints={mapPoints} 
-                completed={mapCompleted} 
+                completed={mapCompleted}
+                viewingRecord={viewingRecord}
               />
               
-              {pos && (view !== 'green' || !mapCompleted) && (
+              {pos && (view !== 'green' || !mapCompleted) && !viewingRecord && (
                 <>
                   <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ color: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, opacity: 0.2 }} />
                   <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2.5 }} />
                 </>
               )}
 
-              {view === 'track' && trkStart && pos && (
+              {viewingRecord && viewingRecord.type === 'Track' && viewingRecord.points.length >= 2 && (
+                <>
+                   <CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
+                   <CircleMarker center={[viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1 }} />
+                   <Polyline positions={viewingRecord.points.map(p => [p.lat, p.lng])} color="#3b82f6" weight={5} />
+                </>
+              )}
+
+              {view === 'track' && trkStart && pos && !viewingRecord && (
                 <>
                   <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
                   <Polyline positions={[[trkStart.lat, trkStart.lng], [pos.lat, pos.lng]]} color="#3b82f6" weight={5} dashArray="10, 15" />
                 </>
               )}
 
-              {view === 'green' && mapPoints.length > 1 && (
+              {viewingRecord && viewingRecord.type === 'Green' && viewingRecord.points.length >= 3 && (
+                <>
+                  {viewingRecord.points.map((p, i, arr) => {
+                    if (i === 0) return null;
+                    const prev = arr[i - 1];
+                    return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
+                  })}
+                  <Polygon positions={viewingRecord.points.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
+                </>
+              )}
+
+              {view === 'green' && mapPoints.length > 1 && !viewingRecord && (
                 <>
                   {mapPoints.map((p, i, arr) => {
                     if (i === 0) return null;
@@ -490,6 +529,7 @@ const App: React.FC = () => {
                   <div className="pointer-events-auto flex justify-center">
                     <button 
                       onClick={() => {
+                        setViewingRecord(null);
                         if (!trkActive) {
                           setTrkActive(true);
                           setTrkStart(pos);
@@ -499,29 +539,29 @@ const App: React.FC = () => {
                       }}
                       className={`w-full h-16 rounded-3xl font-black text-[10px] tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                     >
-                      <Navigation2 size={18} /> {trkActive ? 'End Tracking' : 'Start new track'}
+                      <Navigation2 size={18} /> {viewingRecord ? 'Start live track' : (trkActive ? 'End Tracking' : 'Start new track')}
                     </button>
                   </div>
                   <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full shadow-2xl">
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          GNSS ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
+                          {viewingRecord ? 'ARCHIVED LOG' : `GNSS ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Hz Distance</span>
                         <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
-                          {formatDist(currentShotDist, units)}
+                          {viewingRecord ? viewingRecord.primaryValue.replace(/[a-z²]/gi, '') : formatDist(currentShotDist, units)}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </FitText>
                       </div>
                       <div className="h-20 w-px bg-white/10 shrink-0"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
+                          {viewingRecord ? 'ALTITUDE DATA' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
                         <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
-                          {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
+                          {viewingRecord ? viewingRecord.secondaryValue?.replace('Elev: ', '').replace(/[a-z²]/gi, '') : ((elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units))}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
                         </FitText>
                       </div>
@@ -534,6 +574,7 @@ const App: React.FC = () => {
                     <div className="flex gap-2 w-full">
                       <button 
                         onClick={() => {
+                          setViewingRecord(null);
                           if (mapCompleted) {
                             setMapPoints([]);
                             setMapCompleted(false);
@@ -551,10 +592,10 @@ const App: React.FC = () => {
                         }}
                         className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase border border-white/10 transition-all flex items-center justify-center gap-2 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'} ${mapCompleted ? 'bg-slate-800' : ''}`}
                       >
-                        {mapCompleted ? 'NEW GREEN' : (mapActive ? 'CLOSE GREEN' : 'START GREEN')}
+                        {viewingRecord ? 'NEW GREEN' : (mapCompleted ? 'NEW GREEN' : (mapActive ? 'CLOSE GREEN' : 'START GREEN'))}
                       </button>
                       
-                      {!mapCompleted && (
+                      {!mapCompleted && !viewingRecord && (
                         <button 
                           disabled={!mapActive}
                           onPointerDown={() => setIsBunker(true)} 
@@ -565,7 +606,7 @@ const App: React.FC = () => {
                         </button>
                       )}
 
-                      {mapActive && (
+                      {mapActive && !viewingRecord && (
                         <button onClick={() => setShowMapRestartConfirm(true)} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
                           <RotateCcw size={20} />
                         </button>
@@ -578,38 +619,44 @@ const App: React.FC = () => {
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">AREA</span>
                         <div className="text-2xl font-black text-emerald-400 tabular-nums leading-none">
-                          {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
+                          {viewingRecord ? viewingRecord.primaryValue.replace(/[a-z²]/gi, '') : (areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--')}
                           <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
                         </div>
                       </div>
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">WALKED</span>
                         <div className="text-2xl font-black text-blue-400 tabular-nums leading-none">
-                          {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
+                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--')}
                           <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
                         <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
-                          {areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--'}
+                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--')}
                           <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER %</span>
                         <div className="text-2xl font-black text-amber-500 tabular-nums leading-none">
-                          {areaMetrics ? areaMetrics.bunkerPct : '--'}
+                          {viewingRecord ? viewingRecord.secondaryValue?.split(':')[1].trim().replace('%', '') : (areaMetrics ? areaMetrics.bunkerPct : '--')}
                           <span className="text-[12px] ml-0.5 opacity-50">%</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="flex items-center justify-center gap-3 py-2 bg-white/[0.02] border-t border-white/5">
-                      <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
-                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                        Hz Accuracy: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
-                      </span>
+                      {viewingRecord ? (
+                        <span className="text-[8px] font-black text-blue-400 uppercase tracking-[0.2em]">VIEWING ARCHIVED RECORD</span>
+                      ) : (
+                        <>
+                          <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
+                          <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                            Hz Accuracy: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </>

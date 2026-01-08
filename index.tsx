@@ -140,7 +140,6 @@ const MapController: React.FC<{
   }, [active]);
 
   useEffect(() => {
-    // If viewing a history record, prioritize fitting its points
     if (viewingRecord && viewingRecord.points.length > 0) {
       const bounds = L.latLngBounds(viewingRecord.points.map(p => [p.lat, p.lng]));
       map.fitBounds(bounds, { padding: [50, 50], animate: true });
@@ -199,12 +198,10 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<SavedRecord[]>([]);
   const [viewingRecord, setViewingRecord] = useState<SavedRecord | null>(null);
 
-  // Track State
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  // Green State
   const [mapActive, setMapActive] = useState(false);
   const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
@@ -351,7 +348,7 @@ const App: React.FC = () => {
       {showMapRestartConfirm && (
         <ConfirmDialogue 
           title="Restart Mapper?" 
-          message="This will clear all currently walked points. This action cannot be undone."
+          message="This will clear all currently walked points."
           onConfirm={() => {
             setMapPoints([]);
             setShowMapRestartConfirm(false);
@@ -477,7 +474,6 @@ const App: React.FC = () => {
                 viewingRecord={viewingRecord}
               />
               
-              {/* Live Location Markers */}
               {pos && (view !== 'green' || !mapCompleted) && !viewingRecord && (
                 <>
                   <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ color: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, opacity: 0.2 }} />
@@ -485,7 +481,6 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {/* Historical/Review Track */}
               {viewingRecord && viewingRecord.type === 'Track' && viewingRecord.points.length >= 2 && (
                 <>
                    <CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
@@ -494,7 +489,6 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {/* Live Track */}
               {view === 'track' && trkStart && pos && !viewingRecord && (
                 <>
                   <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
@@ -502,7 +496,6 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {/* Historical/Review Green */}
               {viewingRecord && viewingRecord.type === 'Green' && viewingRecord.points.length >= 3 && (
                 <>
                   {viewingRecord.points.map((p, i, arr) => {
@@ -514,7 +507,6 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {/* Live Green Mapping */}
               {view === 'green' && mapPoints.length > 1 && !viewingRecord && (
                 <>
                   {mapPoints.map((p, i, arr) => {
@@ -547,14 +539,14 @@ const App: React.FC = () => {
                       }}
                       className={`w-full h-16 rounded-3xl font-black text-[10px] tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                     >
-                      <Navigation2 size={18} /> {viewingRecord ? 'Start new track' : (trkActive ? 'End Tracking' : 'Start new track')}
+                      <Navigation2 size={18} /> {viewingRecord ? 'Start live track' : (trkActive ? 'End Tracking' : 'Start new track')}
                     </button>
                   </div>
                   <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full shadow-2xl">
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'RECORDED DATA' : `GNSS ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
+                          {viewingRecord ? 'ARCHIVED LOG' : `GNSS ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Hz Distance</span>
                         <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
@@ -565,7 +557,7 @@ const App: React.FC = () => {
                       <div className="h-20 w-px bg-white/10 shrink-0"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ELEVATION LOG' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`}
+                          {viewingRecord ? 'ALTITUDE DATA' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
                         <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
