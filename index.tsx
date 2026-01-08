@@ -30,7 +30,7 @@ interface GeoPoint {
 
 interface SavedRecord {
   id: string;
-  type: 'Shot' | 'Map';
+  type: 'Track' | 'Green';
   date: number;
   primaryValue: string;
   secondaryValue?: string;
@@ -41,7 +41,6 @@ interface SavedRecord {
 const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng: number}): number => {
   const R = 6371e3;
   const φ1 = p1.lat * Math.PI / 180;
-  const φ2 = p1.lat * Math.PI / 180; // Intentional minimal diff for calc logic
   const lat1 = p1.lat * Math.PI / 180;
   const lat2 = p2.lat * Math.PI / 180;
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
@@ -259,7 +258,7 @@ const App: React.FC = () => {
   const finalizeMapping = useCallback(() => {
     if (areaMetrics) {
       saveRecord({
-        type: 'Map',
+        type: 'Green',
         primaryValue: Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) + (units === 'Yards' ? 'yd²' : 'm²'),
         secondaryValue: `Bunker: ${areaMetrics.bunkerPct}%`,
         points: mapPoints
@@ -302,9 +301,9 @@ const App: React.FC = () => {
 
   const confirmEndTrack = () => {
     saveRecord({
-      type: 'Shot',
+      type: 'Track',
       primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
-      secondaryValue: (elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm'),
+      secondaryValue: `Elev: ${(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm')}`,
       points: [trkStart!, pos!]
     });
     setTrkActive(false);
@@ -386,9 +385,12 @@ const App: React.FC = () => {
                 <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
                   {history.map(item => (
                     <div key={item.id} className="relative shrink-0">
-                      <div className="bg-slate-900/50 border border-white/5 px-5 py-3.5 rounded-2xl flex flex-col min-w-[140px] shadow-sm">
-                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1">{item.type}</span>
-                        <span className="text-base font-black tabular-nums">{item.primaryValue}</span>
+                      <div className="bg-slate-900/50 border border-white/5 px-4 py-3 rounded-2xl flex flex-col min-w-[150px] shadow-sm">
+                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1 tracking-widest">{item.type}</span>
+                        <span className="text-base font-black tabular-nums leading-tight">{item.primaryValue}</span>
+                        {item.secondaryValue && (
+                          <span className="text-[9px] font-medium text-slate-400 mt-1 opacity-80">{item.secondaryValue}</span>
+                        )}
                       </div>
                       <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white"><Trash2 size={12} /></button>
                     </div>
