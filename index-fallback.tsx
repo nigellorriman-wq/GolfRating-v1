@@ -260,7 +260,7 @@ const App: React.FC = () => {
                 className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
               >
                 <ChevronLeft size={20} className="text-emerald-400" />
-                <span className="text-[11px] font-black uppercase tracking-[0.2em]">Start Screen</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.2em]">Home</span>
               </button>
 
               <button 
@@ -313,15 +313,15 @@ const App: React.FC = () => {
               {view === 'shot' ? (
                 <div className="flex items-center justify-around">
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Current Hit</span>
-                    <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter">
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Hz Distance</span>
+                    <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                       {formatDist(currentShotDist, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                     </div>
                   </div>
                   <div className="h-12 w-px bg-white/10 mx-2"></div>
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Slope</span>
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Elev change</span>
                     <div className="text-[32px] font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                       {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>

@@ -10,7 +10,9 @@ import {
   Target,
   History as HistoryIcon,
   Trash2,
-  Zap
+  Zap,
+  AlertCircle,
+  Ruler
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -45,7 +47,8 @@ const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
     Math.cos(φ1) * Math.cos(φ2) *
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 };
 
 const calculateArea = (points: GeoPoint[]): number => {
@@ -106,6 +109,7 @@ const App: React.FC = () => {
   // Shot Tracking State
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Mapping State
   const [mapActive, setMapActive] = useState(false);
@@ -175,9 +179,37 @@ const App: React.FC = () => {
     return { area: calculateArea(mapPoints), perimeter };
   }, [mapPoints]);
 
+  const confirmEndTrack = () => {
+    saveRecord({
+      type: 'Shot',
+      primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
+      secondaryValue: (elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm'),
+      points: [trkStart!, pos!]
+    });
+    setTrkActive(false);
+    setTrkStart(null);
+    setShowEndConfirm(false);
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
       <div className="h-[env(safe-area-inset-top)] bg-[#0f172a] shrink-0"></div>
+
+      {showEndConfirm && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0f172a] w-full max-w-xs rounded-[2rem] border border-white/10 p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-center">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-500/20">
+              <AlertCircle size={24} className="text-amber-500" />
+            </div>
+            <h3 className="text-lg font-black uppercase italic mb-2">End current track?</h3>
+            <p className="text-slate-400 text-xs leading-relaxed mb-6 font-medium">This will stop tracking and save the current distance measurement to your history.</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={confirmEndTrack} className="w-full py-3.5 bg-blue-600 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase text-white shadow-lg active:scale-95 transition-all">Confirm & Save</button>
+              <button onClick={() => setShowEndConfirm(false)} className="w-full py-3.5 bg-slate-800 rounded-2xl font-black text-[10px] tracking-[0.2em] uppercase text-slate-400 active:scale-95 transition-all">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {view === 'landing' ? (
         <div className="flex-1 flex flex-col p-6 animate-in fade-in duration-500 overflow-y-auto no-scrollbar">
@@ -256,19 +288,27 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none">
             <div className="flex justify-between items-start">
               <button 
-                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); }}
+                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setShowEndConfirm(false); }}
                 className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
               >
                 <ChevronLeft size={20} className="text-emerald-400" />
-                <span className="text-[11px] font-black uppercase tracking-[0.2em]">Start Screen</span>
+                <span className="text-[11px] font-black uppercase tracking-[0.2em]">Home</span>
               </button>
 
-              <button 
-                onClick={() => setMapStyle(s => s === 'Street' ? 'Satellite' : 'Street')}
-                className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full shadow-2xl active:scale-95 transition-all"
-              >
-                <Layers size={22} className={mapStyle === 'Satellite' ? 'text-blue-400' : 'text-slate-400'} />
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => setUnits(u => u === 'Yards' ? 'Metres' : 'Yards')}
+                  className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full shadow-2xl active:scale-95 transition-all"
+                >
+                  <Ruler size={22} className="text-emerald-400" />
+                </button>
+                <button 
+                  onClick={() => setMapStyle(s => s === 'Street' ? 'Satellite' : 'Street')}
+                  className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full shadow-2xl active:scale-95 transition-all"
+                >
+                  <Layers size={22} className={mapStyle === 'Satellite' ? 'text-blue-400' : 'text-slate-400'} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -313,15 +353,15 @@ const App: React.FC = () => {
               {view === 'shot' ? (
                 <div className="flex items-center justify-around">
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Current Hit</span>
-                    <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter">
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Hz Distance</span>
+                    <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                       {formatDist(currentShotDist, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                     </div>
                   </div>
                   <div className="h-12 w-px bg-white/10 mx-2"></div>
                   <div className="text-center">
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Slope</span>
+                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-1">Elev change</span>
                     <div className="text-[32px] font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                       {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
@@ -356,19 +396,12 @@ const App: React.FC = () => {
                       setTrkActive(true);
                       setTrkStart(pos);
                     } else {
-                      saveRecord({
-                        type: 'Shot',
-                        primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
-                        secondaryValue: (elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm'),
-                        points: [trkStart!, pos!]
-                      });
-                      setTrkActive(false);
-                      setTrkStart(null);
+                      setShowEndConfirm(true);
                     }
                   }}
                   className={`flex-1 h-16 rounded-[2.2rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                 >
-                  <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Record Shot'}
+                  <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Start new track'}
                 </button>
               ) : (
                 <div className="flex flex-col gap-3 w-full">
@@ -419,6 +452,7 @@ const App: React.FC = () => {
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
       `}</style>
     </div>
   );
