@@ -1,5 +1,5 @@
 {
-  "name": "golfrating-v2",
+  "name": "scottish-golf",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,7 @@
   "dependencies": {
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "lucide-react": "0.446.0",
+    "lucide-react": "0.292.0",
     "react-leaflet": "4.2.1",
     "leaflet": "1.9.4"
   },

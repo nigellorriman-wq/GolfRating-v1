@@ -1,7 +1,7 @@
 {
-  "name": "Golf Tracker",
-  "short_name": "GolfTracker",
-  "description": "Golf course measurement and green mapping tool.",
+  "name": "ProGolf Tracker",
+  "short_name": "ProGolf",
+  "description": "Precision golf course measurement and mapping tool.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
