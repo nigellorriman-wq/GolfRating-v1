@@ -512,4 +512,124 @@ const App: React.FC = () => {
                         <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                           {formatDist(currentShotDist, units)}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                        
+                        </FitText>
+                      </div>
+                      <div className="h-20 w-px bg-white/10 shrink-0"></div>
+                      <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
+                          WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
+                        </FitText>
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
+                        <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
+                          {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
+                          <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
+                        </FitText>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="pointer-events-auto">
+                    <div className="flex gap-2 w-full">
+                      <button 
+                        onClick={() => {
+                          if (mapCompleted) {
+                            setMapPoints([]);
+                            setMapCompleted(false);
+                            setMapActive(false);
+                            return;
+                          }
+
+                          if (!mapActive) {
+                            setMapPoints(pos ? [pos] : []);
+                            setMapActive(true);
+                            setMapCompleted(false);
+                          } else {
+                            finalizeMapping();
+                          }
+                        }}
+                        className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase border border-white/10 transition-all flex items-center justify-center gap-2 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'} ${mapCompleted ? 'bg-slate-800' : ''}`}
+                      >
+                        {mapCompleted ? 'NEW GREEN' : (mapActive ? 'CLOSE GREEN' : 'START GREEN')}
+                      </button>
+                      
+                      {!mapCompleted && (
+                        <button 
+                          disabled={!mapActive}
+                          onPointerDown={() => setIsBunker(true)} 
+                          onPointerUp={() => setIsBunker(false)}
+                          className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase transition-all disabled:opacity-30 border border-white/5 flex items-center justify-center gap-2 ${isBunker ? 'bg-orange-600 text-white shadow-orange-600/50' : 'bg-orange-400 text-slate-950'}`}
+                        >
+                          {isBunker ? 'RECORDING' : 'BUNKER (HOLD)'}
+                        </button>
+                      )}
+
+                      {mapActive && (
+                        <button onClick={() => setShowMapRestartConfirm(true)} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
+                          <RotateCcw size={20} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-1 w-full shadow-2xl overflow-hidden">
+                    <div className="grid grid-cols-2 gap-1 mb-1">
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">AREA</span>
+                        <div className="text-2xl font-black text-emerald-400 tabular-nums leading-none">
+                          {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">WALKED</span>
+                        <div className="text-2xl font-black text-blue-400 tabular-nums leading-none">
+                          {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
+                        <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
+                          {areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--'}
+                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
+                        </div>
+                      </div>
+                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
+                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER %</span>
+                        <div className="text-2xl font-black text-amber-500 tabular-nums leading-none">
+                          {areaMetrics ? areaMetrics.bunkerPct : '--'}
+                          <span className="text-[12px] ml-0.5 opacity-50">%</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-center gap-3 py-2 bg-white/[0.02] border-t border-white/5">
+                      <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
+                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                        Hz Accuracy: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="h-[env(safe-area-inset-bottom)] bg-[#020617] shrink-0"></div>
+      
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+      `}</style>
+    </div>
+  );
+};
+
+const container = document.getElementById('root');
+if (container) {
+  createRoot(container).render(<App />);
+}
