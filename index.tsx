@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 /** --- TYPES --- **/
-type AppView = 'landing' | 'shot' | 'map';
+type AppView = 'landing' | 'track' | 'green';
 type UnitSystem = 'Yards' | 'Metres';
 
 interface GeoPoint {
@@ -40,7 +40,6 @@ interface SavedRecord {
 /** --- UTILITIES --- **/
 const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng: number}): number => {
   const R = 6371e3;
-  const φ1 = p1.lat * Math.PI / 180;
   const lat1 = p1.lat * Math.PI / 180;
   const lat2 = p2.lat * Math.PI / 180;
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
@@ -190,12 +189,12 @@ const App: React.FC = () => {
   const [pos, setPos] = useState<GeoPoint | null>(null);
   const [history, setHistory] = useState<SavedRecord[]>([]);
 
-  // Shot Tracking State
+  // Track State
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  // Mapping State
+  // Green State
   const [mapActive, setMapActive] = useState(false);
   const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
@@ -204,7 +203,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem('golf_pro_caddy_final');
-    if (saved) setHistory(JSON.parse(saved));
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load history", e);
+      }
+    }
 
     if (!navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
@@ -300,12 +305,14 @@ const App: React.FC = () => {
     : 0;
 
   const confirmEndTrack = () => {
-    saveRecord({
-      type: 'Track',
-      primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
-      secondaryValue: `Elev: ${(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm')}`,
-      points: [trkStart!, pos!]
-    });
+    if (trkStart && pos) {
+      saveRecord({
+        type: 'Track',
+        primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
+        secondaryValue: `Elev: ${(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm')}`,
+        points: [trkStart, pos]
+      });
+    }
     setTrkActive(false);
     setTrkStart(null);
     setShowEndConfirm(false);
@@ -347,7 +354,7 @@ const App: React.FC = () => {
 
           <div className="flex flex-col gap-4">
             <button 
-              onClick={() => setView('shot')}
+              onClick={() => setView('track')}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -361,7 +368,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => { setView('map'); setMapCompleted(false); setMapPoints([]); }}
+              onClick={() => { setView('green'); setMapCompleted(false); setMapPoints([]); }}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -382,17 +389,21 @@ const App: React.FC = () => {
                   <HistoryIcon size={14} className="text-slate-600" />
                   <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Recent Stats</span>
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
                     <div key={item.id} className="relative shrink-0">
-                      <div className="bg-slate-900/50 border border-white/5 px-4 py-3 rounded-2xl flex flex-col min-w-[150px] shadow-sm">
-                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1 tracking-widest">{item.type}</span>
-                        <span className="text-base font-black tabular-nums leading-tight">{item.primaryValue}</span>
+                      <div className="bg-slate-900/50 border border-white/5 px-5 py-4 rounded-2xl flex flex-col min-w-[170px] shadow-sm">
+                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1 tracking-[0.2em]">
+                          {item.type === 'Track' ? 'TRACK' : 'GREEN'}
+                        </span>
+                        <span className="text-lg font-black tabular-nums leading-tight text-white mb-0.5">{item.primaryValue}</span>
                         {item.secondaryValue && (
-                          <span className="text-[9px] font-medium text-slate-400 mt-1 opacity-80">{item.secondaryValue}</span>
+                          <span className="text-[10px] font-bold text-slate-400 opacity-90">{item.secondaryValue}</span>
                         )}
                       </div>
-                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white"><Trash2 size={12} /></button>
+                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white shadow-lg active:scale-90 transition-all">
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -443,21 +454,21 @@ const App: React.FC = () => {
                 completed={mapCompleted} 
               />
               
-              {pos && (view !== 'map' || !mapCompleted) && (
+              {pos && (view !== 'green' || !mapCompleted) && (
                 <>
                   <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ color: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, opacity: 0.2 }} />
                   <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2.5 }} />
                 </>
               )}
 
-              {view === 'shot' && trkStart && pos && (
+              {view === 'track' && trkStart && pos && (
                 <>
                   <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
                   <Polyline positions={[[trkStart.lat, trkStart.lng], [pos.lat, pos.lng]]} color="#3b82f6" weight={5} dashArray="10, 15" />
                 </>
               )}
 
-              {view === 'map' && mapPoints.length > 1 && (
+              {view === 'green' && mapPoints.length > 1 && (
                 <>
                   {mapPoints.map((p, i, arr) => {
                     if (i === 0) return null;
@@ -474,7 +485,7 @@ const App: React.FC = () => {
 
           <div className="absolute inset-x-0 bottom-0 z-[1000] p-4 pointer-events-none flex flex-col gap-4 items-center">
             <div className="flex flex-col gap-4 w-full max-w-sm">
-              {view === 'shot' ? (
+              {view === 'track' ? (
                 <>
                   <div className="pointer-events-auto flex justify-center">
                     <button 

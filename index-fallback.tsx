@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 /** --- TYPES --- **/
-type AppView = 'landing' | 'shot' | 'map';
+type AppView = 'landing' | 'track' | 'green';
 type UnitSystem = 'Yards' | 'Metres';
 
 interface GeoPoint {
@@ -30,7 +30,7 @@ interface GeoPoint {
 
 interface SavedRecord {
   id: string;
-  type: 'Shot' | 'Map';
+  type: 'Track' | 'Green';
   date: number;
   primaryValue: string;
   secondaryValue?: string;
@@ -40,12 +40,12 @@ interface SavedRecord {
 /** --- UTILITIES --- **/
 const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng: number}): number => {
   const R = 6371e3;
-  const φ1 = p1.lat * Math.PI / 180;
-  const φ2 = p2.lat * Math.PI / 180;
+  const lat1 = p1.lat * Math.PI / 180;
+  const lat2 = p2.lat * Math.PI / 180;
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
   const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
+    Math.cos(lat1) * Math.cos(lat2) *
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -189,12 +189,12 @@ const App: React.FC = () => {
   const [pos, setPos] = useState<GeoPoint | null>(null);
   const [history, setHistory] = useState<SavedRecord[]>([]);
 
-  // Shot Tracking State
+  // Track State
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
-  // Mapping State
+  // Green State
   const [mapActive, setMapActive] = useState(false);
   const [mapCompleted, setMapCompleted] = useState(false);
   const [mapPoints, setMapPoints] = useState<GeoPoint[]>([]);
@@ -203,7 +203,13 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const saved = localStorage.getItem('golf_pro_caddy_final');
-    if (saved) setHistory(JSON.parse(saved));
+    if (saved) {
+      try {
+        setHistory(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load history", e);
+      }
+    }
 
     if (!navigator.geolocation) return;
     const watch = navigator.geolocation.watchPosition(
@@ -257,7 +263,7 @@ const App: React.FC = () => {
   const finalizeMapping = useCallback(() => {
     if (areaMetrics) {
       saveRecord({
-        type: 'Map',
+        type: 'Green',
         primaryValue: Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) + (units === 'Yards' ? 'yd²' : 'm²'),
         secondaryValue: `Bunker: ${areaMetrics.bunkerPct}%`,
         points: mapPoints
@@ -299,12 +305,14 @@ const App: React.FC = () => {
     : 0;
 
   const confirmEndTrack = () => {
-    saveRecord({
-      type: 'Shot',
-      primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
-      secondaryValue: (elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm'),
-      points: [trkStart!, pos!]
-    });
+    if (trkStart && pos) {
+      saveRecord({
+        type: 'Track',
+        primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
+        secondaryValue: `Elev: ${(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm')}`,
+        points: [trkStart, pos]
+      });
+    }
     setTrkActive(false);
     setTrkStart(null);
     setShowEndConfirm(false);
@@ -346,7 +354,7 @@ const App: React.FC = () => {
 
           <div className="flex flex-col gap-4">
             <button 
-              onClick={() => setView('shot')}
+              onClick={() => setView('track')}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -360,7 +368,7 @@ const App: React.FC = () => {
             </button>
 
             <button 
-              onClick={() => { setView('map'); setMapCompleted(false); setMapPoints([]); }}
+              onClick={() => { setView('green'); setMapCompleted(false); setMapPoints([]); }}
               className="group relative bg-slate-900 border border-white/5 rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center overflow-hidden active:scale-95 transition-all shadow-2xl"
             >
               <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -381,14 +389,21 @@ const App: React.FC = () => {
                   <HistoryIcon size={14} className="text-slate-600" />
                   <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Recent Stats</span>
                 </div>
-                <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+                <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
                     <div key={item.id} className="relative shrink-0">
-                      <div className="bg-slate-900/50 border border-white/5 px-5 py-3.5 rounded-2xl flex flex-col min-w-[140px] shadow-sm">
-                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1">{item.type}</span>
-                        <span className="text-base font-black tabular-nums">{item.primaryValue}</span>
+                      <div className="bg-slate-900/50 border border-white/5 px-5 py-4 rounded-2xl flex flex-col min-w-[170px] shadow-sm">
+                        <span className="text-[7px] font-black text-slate-500 uppercase mb-1 tracking-[0.2em]">
+                          {item.type === 'Track' ? 'TRACK' : 'GREEN'}
+                        </span>
+                        <span className="text-lg font-black tabular-nums leading-tight text-white mb-0.5">{item.primaryValue}</span>
+                        {item.secondaryValue && (
+                          <span className="text-[10px] font-bold text-slate-400 opacity-90">{item.secondaryValue}</span>
+                        )}
                       </div>
-                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white"><Trash2 size={12} /></button>
+                      <button onClick={(e) => deleteHistory(item.id, e)} className="absolute -top-2 -right-2 w-7 h-7 bg-red-500 rounded-full flex items-center justify-center border-2 border-[#020617] text-white shadow-lg active:scale-90 transition-all">
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -439,21 +454,21 @@ const App: React.FC = () => {
                 completed={mapCompleted} 
               />
               
-              {pos && (view !== 'map' || !mapCompleted) && (
+              {pos && (view !== 'green' || !mapCompleted) && (
                 <>
                   <Circle center={[pos.lat, pos.lng]} radius={pos.accuracy} pathOptions={{ color: getAccuracyColor(pos.accuracy), fillOpacity: 0.1, weight: 1, opacity: 0.2 }} />
                   <CircleMarker center={[pos.lat, pos.lng]} radius={7} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1, weight: 2.5 }} />
                 </>
               )}
 
-              {view === 'shot' && trkStart && pos && (
+              {view === 'track' && trkStart && pos && (
                 <>
                   <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
                   <Polyline positions={[[trkStart.lat, trkStart.lng], [pos.lat, pos.lng]]} color="#3b82f6" weight={5} dashArray="10, 15" />
                 </>
               )}
 
-              {view === 'map' && mapPoints.length > 1 && (
+              {view === 'green' && mapPoints.length > 1 && (
                 <>
                   {mapPoints.map((p, i, arr) => {
                     if (i === 0) return null;
@@ -470,7 +485,7 @@ const App: React.FC = () => {
 
           <div className="absolute inset-x-0 bottom-0 z-[1000] p-4 pointer-events-none flex flex-col gap-4 items-center">
             <div className="flex flex-col gap-4 w-full max-w-sm">
-              {view === 'shot' ? (
+              {view === 'track' ? (
                 <>
                   <div className="pointer-events-auto flex justify-center">
                     <button 
@@ -497,124 +512,4 @@ const App: React.FC = () => {
                         <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                           {formatDist(currentShotDist, units)}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                        </FitText>
-                      </div>
-                      <div className="h-20 w-px bg-white/10 shrink-0"></div>
-                      <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
-                        </FitText>
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
-                        <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
-                          {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
-                          <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
-                        </FitText>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="pointer-events-auto">
-                    <div className="flex gap-2 w-full">
-                      <button 
-                        onClick={() => {
-                          if (mapCompleted) {
-                            setMapPoints([]);
-                            setMapCompleted(false);
-                            setMapActive(false);
-                            return;
-                          }
-
-                          if (!mapActive) {
-                            setMapPoints(pos ? [pos] : []);
-                            setMapActive(true);
-                            setMapCompleted(false);
-                          } else {
-                            finalizeMapping();
-                          }
-                        }}
-                        className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase border border-white/10 transition-all flex items-center justify-center gap-2 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'} ${mapCompleted ? 'bg-slate-800' : ''}`}
-                      >
-                        {mapCompleted ? 'NEW GREEN' : (mapActive ? 'CLOSE GREEN' : 'START GREEN')}
-                      </button>
-                      
-                      {!mapCompleted && (
-                        <button 
-                          disabled={!mapActive}
-                          onPointerDown={() => setIsBunker(true)} 
-                          onPointerUp={() => setIsBunker(false)}
-                          className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase transition-all disabled:opacity-30 border border-white/5 flex items-center justify-center gap-2 ${isBunker ? 'bg-orange-600 text-white shadow-orange-600/50' : 'bg-orange-400 text-slate-950'}`}
-                        >
-                          {isBunker ? 'RECORDING' : 'BUNKER (HOLD)'}
-                        </button>
-                      )}
-
-                      {mapActive && (
-                        <button onClick={() => setShowMapRestartConfirm(true)} className="w-16 h-20 bg-slate-800 rounded-[2.2rem] flex items-center justify-center border border-white/10 text-slate-400 shrink-0">
-                          <RotateCcw size={20} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-1 w-full shadow-2xl overflow-hidden">
-                    <div className="grid grid-cols-2 gap-1 mb-1">
-                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">AREA</span>
-                        <div className="text-2xl font-black text-emerald-400 tabular-nums leading-none">
-                          {areaMetrics ? Math.round(areaMetrics.area * (units === 'Yards' ? 1.196 : 1)) : '--'}
-                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd²' : 'm²'}</span>
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">WALKED</span>
-                        <div className="text-2xl font-black text-blue-400 tabular-nums leading-none">
-                          {areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--'}
-                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
-                        <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
-                          {areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--'}
-                          <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                        </div>
-                      </div>
-                      <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
-                        <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER %</span>
-                        <div className="text-2xl font-black text-amber-500 tabular-nums leading-none">
-                          {areaMetrics ? areaMetrics.bunkerPct : '--'}
-                          <span className="text-[12px] ml-0.5 opacity-50">%</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-center gap-3 py-2 bg-white/[0.02] border-t border-white/5">
-                      <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
-                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
-                        Hz Accuracy: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      <div className="h-[env(safe-area-inset-bottom)] bg-[#020617] shrink-0"></div>
-      
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
-      `}</style>
-    </div>
-  );
-};
-
-const container = document.getElementById('root');
-if (container) {
-  createRoot(container).render(<App />);
-}
+                        
