@@ -550,7 +550,7 @@ const App: React.FC = () => {
                         }}
                         className={`flex-1 h-20 rounded-[2.2rem] font-black text-[10px] tracking-widest uppercase border border-white/10 transition-all flex items-center justify-center gap-2 ${mapActive ? 'bg-blue-600 text-white' : 'bg-emerald-600 text-white active:scale-95'} ${mapCompleted ? 'bg-slate-800' : ''}`}
                       >
-                        {mapCompleted ? 'NEW FEATURE' : (mapActive ? 'CLOSE FEATURE' : 'START FEATURE')}
+                        {mapCompleted ? 'NEW GREEN' : (mapActive ? 'CLOSE GREEN' : 'START GREEN')}
                       </button>
                       
                       {!mapCompleted && (
