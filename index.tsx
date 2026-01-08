@@ -396,19 +396,6 @@ const App: React.FC = () => {
                 </div>
               </div>
             )}
-            
-            <div className="flex justify-between items-center px-4 py-5 bg-slate-900/50 border border-white/5 rounded-3xl">
-              <button 
-                onClick={() => setUnits(u => u === 'Yards' ? 'Metres' : 'Yards')} 
-                className="text-[10px] font-black text-emerald-400 uppercase tracking-widest bg-emerald-400/10 px-4 py-2 rounded-xl"
-              >
-                {units}
-              </button>
-              <div className="flex items-center gap-3">
-                 <div className={`w-2 h-2 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-[0_0_10px_rgba(16,185,129,0.5)]`}></div>
-                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">GPS: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING'}</span>
-              </div>
-            </div>
           </footer>
         </div>
       ) : (
@@ -573,8 +560,8 @@ const App: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-1 w-full shadow-2xl">
-                    <div className="grid grid-cols-2 gap-1">
+                  <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-1 w-full shadow-2xl overflow-hidden">
+                    <div className="grid grid-cols-2 gap-1 mb-1">
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">AREA</span>
                         <div className="text-2xl font-black text-emerald-400 tabular-nums leading-none">
@@ -603,6 +590,13 @@ const App: React.FC = () => {
                           <span className="text-[12px] ml-0.5 opacity-50">%</span>
                         </div>
                       </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-center gap-3 py-2 bg-white/[0.02] border-t border-white/5">
+                      <div className={`w-1.5 h-1.5 rounded-full ${pos ? getAccuracyColor(pos.accuracy) : 'bg-red-500 animate-pulse'} shadow-sm`}></div>
+                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                        Signal Quality: {pos ? `±${(pos.accuracy * (units === 'Yards' ? 1.09 : 1)).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}` : 'SEARCHING...'}
+                      </span>
                     </div>
                   </div>
                 </>
