@@ -77,7 +77,47 @@ const getAccuracyColor = (acc: number) => {
   return '#ef4444';
 };
 
-/** --- MAP CONTROLLER --- **/
+/** --- COMPONENTS --- **/
+
+const FitText: React.FC<{ children: React.ReactNode; className?: string; maxFontSize: number }> = ({ children, className, maxFontSize }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [fontSize, setFontSize] = useState(maxFontSize);
+
+  const adjustSize = useCallback(() => {
+    if (!containerRef.current || !textRef.current) return;
+    
+    let currentSize = maxFontSize;
+    textRef.current.style.fontSize = `${currentSize}px`;
+    
+    // Iteratively shrink font size until it fits within parent container width
+    const maxWidth = containerRef.current.clientWidth;
+    while (textRef.current.scrollWidth > maxWidth && currentSize > 10) {
+      currentSize -= 1;
+      textRef.current.style.fontSize = `${currentSize}px`;
+    }
+    setFontSize(currentSize);
+  }, [maxFontSize, children]);
+
+  useEffect(() => {
+    adjustSize();
+    window.addEventListener('resize', adjustSize);
+    return () => window.removeEventListener('resize', adjustSize);
+  }, [adjustSize]);
+
+  return (
+    <div ref={containerRef} className="w-full flex justify-center items-center overflow-hidden">
+      <div 
+        ref={textRef} 
+        className={className} 
+        style={{ fontSize: `${fontSize}px`, whiteSpace: 'nowrap' }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
 const MapController: React.FC<{ pos: GeoPoint | null, active: boolean }> = ({ pos, active }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
@@ -353,27 +393,27 @@ const App: React.FC = () => {
           <div className="absolute inset-x-0 bottom-0 z-[1000] p-4 pointer-events-none flex flex-col gap-4 items-center">
             <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full max-w-sm shadow-2xl">
               {view === 'shot' ? (
-                <div className="flex items-center justify-around">
-                  <div className="text-center">
-                    <span className="text-[10px] font-black text-blue-400/60 uppercase tracking-tighter block -mb-0.5">
-                      GNSS L1/L5 ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
+                <div className="flex items-center justify-around gap-2">
+                  <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block -mb-0.5 opacity-90 whitespace-nowrap">
+                      GNSS ±{(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'yd' : 'm'}
                     </span>
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-0.5">Hz Distance</span>
-                    <div className="text-[52px] font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
+                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block mb-0.5 opacity-40">Hz Distance</span>
+                    <FitText maxFontSize={42} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
                       {formatDist(currentShotDist, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
-                    </div>
+                    </FitText>
                   </div>
-                  <div className="h-14 w-px bg-white/10 mx-1"></div>
-                  <div className="text-center">
-                    <span className="text-[10px] font-black text-amber-400/60 uppercase tracking-tighter block -mb-0.5">
+                  <div className="h-14 w-px bg-white/10 shrink-0"></div>
+                  <div className="flex-1 min-w-0 text-center flex flex-col items-center">
+                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block -mb-0.5 opacity-90 whitespace-nowrap">
                       WGS84 ±{(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}{units === 'Yards' ? 'ft' : 'm'}
                     </span>
-                    <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest block mb-0.5">Elev change</span>
-                    <div className="text-[32px] font-black text-amber-400 tabular-nums leading-none tracking-tighter">
+                    <span className="text-[11px] font-black text-white uppercase tracking-tighter block mb-0.5 opacity-40">Elev change</span>
+                    <FitText maxFontSize={42} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                       {(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units)}
                       <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
-                    </div>
+                    </FitText>
                   </div>
                 </div>
               ) : (
@@ -396,7 +436,7 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="pointer-events-auto flex flex-col gap-3 w-full max-w-sm pb-10">
+            <div className="pointer-events-auto flex flex-col gap-3 w-full max-w-sm pb-2">
               {view === 'shot' ? (
                 <button 
                   onClick={() => {
@@ -407,12 +447,12 @@ const App: React.FC = () => {
                       setShowEndConfirm(true);
                     }
                   }}
-                  className={`flex-1 h-16 rounded-[2.2rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
+                  className={`flex-1 h-32 rounded-[3.5rem] font-black text-xs tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                 >
                   <Navigation2 size={24} /> {trkActive ? 'End Tracking' : 'Start new track'}
                 </button>
               ) : (
-                <div className="flex flex-col gap-3 w-full">
+                <div className="flex flex-col gap-3 w-full pb-8">
                   <div className="flex gap-3">
                     <button 
                       onClick={() => {
