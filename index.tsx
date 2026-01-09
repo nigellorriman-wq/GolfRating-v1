@@ -586,11 +586,12 @@ const App: React.FC = () => {
           </div>
 
           <main className="flex-1">
-            <MapContainer center={[0, 0]} zoom={2} className="h-full w-full fallback-map-bg" zoomControl={false} attributionControl={false}>
+            <MapContainer center={[0, 0]} zoom={2} className="h-full w-full custom-map-container" zoomControl={false} attributionControl={false}>
               <TileLayer 
                 url={mapStyle === 'Street' ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"} 
                 maxZoom={22} 
                 maxNativeZoom={19} 
+                className="opaque-tile-layer"
               />
               <MapController 
                 pos={pos} 
@@ -857,50 +858,45 @@ const App: React.FC = () => {
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
         
-        .fallback-map-bg {
-          background-color: #d1fae5 !important; /* lightgreen */
+        /* The container now holds the fallback UI */
+        .custom-map-container {
+          background-color: #d1fae5 !important; /* Fairway green base */
           background-image: 
-            radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0);
-          background-size: 40px 40px;
-          position: relative;
-          z-index: 1;
-        }
-        
-        /* The watermark is now a background layer of the leaflet container */
-        .leaflet-container.fallback-map-bg {
-          background-image: 
-            radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0),
             linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
             linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
-          background-size: 40px 40px, 100px 100px, 100px 100px;
+          background-size: 100px 100px;
+          position: relative;
         }
-        
-        /* Fixed watermark to sit behind everything else */
-        .fallback-map-bg::before {
+
+        /* Watermark as a true background element of the Leaflet container */
+        .custom-map-container::before {
           content: "NO MAPPING DATA";
           position: absolute;
-          top: 0; left: 0; width: 100%; height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%) rotate(-30deg);
           font-family: system-ui, sans-serif;
           font-weight: 900;
           font-size: 8vw;
-          color: rgba(0, 0, 0, 0.03); /* More subtle */
+          color: rgba(0, 0, 0, 0.04);
           letter-spacing: 0.5em;
           pointer-events: none;
           white-space: nowrap;
-          transform: rotate(-30deg);
-          z-index: 0; /* Behind map panes */
+          z-index: 0;
           text-align: center;
         }
 
-        /* Ensure Leaflet panes are above our custom background but below markers */
+        /* Ensure tiles hide the background entirely */
+        .opaque-tile-layer {
+          z-index: 50;
+        }
+
+        /* Leaflet panes containing markers and lines must be on top of tiles */
         .leaflet-pane {
-          z-index: 400;
+          z-index: 400 !important;
         }
         .leaflet-tile-pane {
-          z-index: 200;
+          z-index: 200 !important;
         }
       `}</style>
     </div>
