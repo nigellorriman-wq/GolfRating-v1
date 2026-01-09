@@ -2,6 +2,6 @@
   "requestFramePermissions": [
     "geolocation"
   ],
-  "name": "Scottish Golf",
-  "description": "Premium two-function tool for tracking drives and mapping greens."
+  "name": "Scottish Golf Rating Toolkit v2",
+  "description": "Premium two-function tool for tracking drives and mapping greens. Version 2.0."
 }

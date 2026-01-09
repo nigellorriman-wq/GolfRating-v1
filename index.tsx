@@ -12,7 +12,9 @@ import {
   Trash2,
   AlertCircle,
   Ruler,
-  Eye
+  Eye,
+  Anchor,
+  Undo2
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -36,6 +38,7 @@ interface SavedRecord {
   primaryValue: string;
   secondaryValue?: string;
   points: GeoPoint[];
+  pivots?: GeoPoint[];
 }
 
 /** --- UTILITIES --- **/
@@ -142,6 +145,9 @@ const MapController: React.FC<{
   useEffect(() => {
     if (viewingRecord && viewingRecord.points.length > 0) {
       const bounds = L.latLngBounds(viewingRecord.points.map(p => [p.lat, p.lng]));
+      if (viewingRecord.pivots) {
+        viewingRecord.pivots.forEach(pv => bounds.extend([pv.lat, pv.lng]));
+      }
       map.fitBounds(bounds, { padding: [50, 50], animate: true });
       return;
     }
@@ -200,6 +206,7 @@ const App: React.FC = () => {
 
   const [trkActive, setTrkActive] = useState(false);
   const [trkStart, setTrkStart] = useState<GeoPoint | null>(null);
+  const [trkPivots, setTrkPivots] = useState<GeoPoint[]>([]);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const [mapActive, setMapActive] = useState(false);
@@ -243,10 +250,10 @@ const App: React.FC = () => {
     let bunkerLength = 0;
 
     for (let i = 0; i < mapPoints.length - 1; i++) {
-      const dist = calculateDistance(mapPoints[i], mapPoints[i+1]);
-      perimeter += dist;
+      const d = calculateDistance(mapPoints[i], mapPoints[i+1]);
+      perimeter += d;
       if (mapPoints[i+1].type === 'bunker') {
-        bunkerLength += dist;
+        bunkerLength += d;
       }
     }
 
@@ -262,7 +269,7 @@ const App: React.FC = () => {
 
   const saveRecord = useCallback((record: Omit<SavedRecord, 'id' | 'date'>) => {
     const newRecord: SavedRecord = { ...record, id: Math.random().toString(36).substr(2, 9), date: Date.now() };
-    const updated = [newRecord, ...history]; // Removed .slice(0, 10) to make history unlimited
+    const updated = [newRecord, ...history];
     setHistory(updated);
     localStorage.setItem('golf_pro_caddy_final', JSON.stringify(updated));
   }, [history]);
@@ -307,7 +314,28 @@ const App: React.FC = () => {
     if (viewingRecord?.id === id) setViewingRecord(null);
   };
 
-  const currentShotDist = (trkStart && pos) ? calculateDistance(trkStart, pos) : 0;
+  /** --- PIVOT TRACKING LOGIC --- **/
+  const currentLegDist = useMemo(() => {
+    if (!pos || !trkStart) return 0;
+    const lastPivot = trkPivots[trkPivots.length - 1];
+    const origin = lastPivot || trkStart;
+    return calculateDistance(origin, pos);
+  }, [pos, trkStart, trkPivots]);
+
+  const accumulatedDist = useMemo(() => {
+    if (!trkStart || !pos) return 0;
+    let total = 0;
+    let lastPoint = trkStart;
+    
+    trkPivots.forEach(pivot => {
+      total += calculateDistance(lastPoint, pivot);
+      lastPoint = pivot;
+    });
+    
+    total += calculateDistance(lastPoint, pos);
+    return total;
+  }, [trkStart, trkPivots, pos]);
+
   const elevDelta = (pos && trkStart && pos.alt !== null && trkStart.alt !== null) 
     ? (pos.alt - trkStart.alt) 
     : 0;
@@ -316,19 +344,31 @@ const App: React.FC = () => {
     if (trkStart && pos) {
       saveRecord({
         type: 'Track',
-        primaryValue: formatDist(currentShotDist, units) + (units === 'Yards' ? 'yd' : 'm'),
+        primaryValue: formatDist(accumulatedDist, units) + (units === 'Yards' ? 'yd' : 'm'),
         secondaryValue: `Elev: ${(elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units) + (units === 'Yards' ? 'ft' : 'm')}`,
-        points: [trkStart, pos]
+        points: [trkStart, pos],
+        pivots: trkPivots
       });
     }
     setTrkActive(false);
     setTrkStart(null);
+    setTrkPivots([]);
     setShowEndConfirm(false);
   };
 
   const handleHistoryClick = (record: SavedRecord) => {
     setViewingRecord(record);
     setView(record.type === 'Track' ? 'track' : 'green');
+  };
+
+  const addPivot = () => {
+    if (pos && trkPivots.length < 3) {
+      setTrkPivots([...trkPivots, pos]);
+    }
+  };
+
+  const undoPivot = () => {
+    setTrkPivots(trkPivots.slice(0, -1));
   };
 
   return (
@@ -338,7 +378,7 @@ const App: React.FC = () => {
       {showEndConfirm && (
         <ConfirmDialogue 
           title="End Track?" 
-          message="This will stop tracking and save the current distance measurement to your history."
+          message="This will stop tracking and save the total accumulated distance to your history."
           onConfirm={confirmEndTrack}
           onCancel={() => setShowEndConfirm(false)}
           confirmLabel="Confirm & Save"
@@ -362,7 +402,7 @@ const App: React.FC = () => {
         <div className="flex-1 flex flex-col p-6 animate-in fade-in duration-500 overflow-y-auto no-scrollbar">
           <header className="mb-10 mt-6 text-center">
             <h1 className="text-4xl font-black tracking-tighter" style={{ color: '#2563EB' }}>Scottish Golf</h1>
-            <p className="text-white text-[9px] font-black tracking-[0.4em] uppercase mt-2">Course Rating Toolkit</p>
+            <p className="text-white text-[9px] font-black tracking-[0.4em] uppercase mt-2">Course rating toolkit v2</p>
           </header>
 
           <div className="flex flex-col gap-4">
@@ -377,7 +417,7 @@ const App: React.FC = () => {
                 <Navigation2 size={32} />
               </div>
               <h2 className="text-2xl font-black mb-2 uppercase italic" style={{ color: '#2563EB' }}>Distance tracker</h2>
-              <p className="text-white text-[11px] font-medium max-w-[200px] leading-relaxed">Realtime horizontal distance and elevation change</p>
+              <p className="text-white text-[11px] font-medium max-w-[200px] leading-relaxed">Realtime accumulated distance with pivot capability</p>
             </button>
 
             <button 
@@ -435,7 +475,7 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none">
             <div className="flex justify-between items-start">
               <button 
-                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setShowEndConfirm(false); setViewingRecord(null); }}
+                onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setShowEndConfirm(false); setViewingRecord(null); setTrkPivots([]); }}
                 className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"
               >
                 <ChevronLeft size={20} className="text-emerald-400" />
@@ -481,41 +521,68 @@ const App: React.FC = () => {
                 </>
               )}
 
-              {viewingRecord && viewingRecord.type === 'Track' && viewingRecord.points.length >= 2 && (
+              {/* TRACKING MAP ELEMENTS */}
+              {view === 'track' && (
                 <>
-                   <CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
-                   <CircleMarker center={[viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1 }} />
-                   <Polyline positions={viewingRecord.points.map(p => [p.lat, p.lng])} color="#3b82f6" weight={5} />
+                  {/* Archived Track */}
+                  {viewingRecord && viewingRecord.type === 'Track' && viewingRecord.points.length >= 2 && (
+                    <>
+                      <CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
+                      {viewingRecord.pivots?.map((pv, idx) => (
+                        <CircleMarker key={idx} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />
+                      ))}
+                      <CircleMarker center={[viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#10b981', fillOpacity: 1 }} />
+                      
+                      <Polyline positions={[
+                        [viewingRecord.points[0].lat, viewingRecord.points[0].lng],
+                        ...(viewingRecord.pivots?.map(p => [p.lat, p.lng]) || []),
+                        [viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng]
+                      ]} color="#3b82f6" weight={5} />
+                    </>
+                  )}
+
+                  {/* Live Track */}
+                  {trkStart && pos && !viewingRecord && (
+                    <>
+                      <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
+                      {trkPivots.map((pv, idx) => (
+                        <CircleMarker key={idx} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />
+                      ))}
+                      <Polyline positions={[
+                        [trkStart.lat, trkStart.lng],
+                        ...trkPivots.map(p => [p.lat, p.lng]),
+                        [pos.lat, pos.lng]
+                      ]} color="#3b82f6" weight={5} />
+                    </>
+                  )}
                 </>
               )}
 
-              {view === 'track' && trkStart && pos && !viewingRecord && (
+              {/* GREEN MAP ELEMENTS */}
+              {view === 'green' && (
                 <>
-                  <CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />
-                  <Polyline positions={[[trkStart.lat, trkStart.lng], [pos.lat, pos.lng]]} color="#3b82f6" weight={5} dashArray="10, 15" />
-                </>
-              )}
+                  {viewingRecord && viewingRecord.type === 'Green' && viewingRecord.points.length >= 3 && (
+                    <>
+                      {viewingRecord.points.map((p, i, arr) => {
+                        if (i === 0) return null;
+                        const prev = arr[i - 1];
+                        return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
+                      })}
+                      <Polygon positions={viewingRecord.points.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
+                    </>
+                  )}
 
-              {viewingRecord && viewingRecord.type === 'Green' && viewingRecord.points.length >= 3 && (
-                <>
-                  {viewingRecord.points.map((p, i, arr) => {
-                    if (i === 0) return null;
-                    const prev = arr[i - 1];
-                    return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
-                  })}
-                  <Polygon positions={viewingRecord.points.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
-                </>
-              )}
-
-              {view === 'green' && mapPoints.length > 1 && !viewingRecord && (
-                <>
-                  {mapPoints.map((p, i, arr) => {
-                    if (i === 0) return null;
-                    const prev = arr[i - 1];
-                    return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
-                  })}
-                  {mapPoints.length > 2 && (mapCompleted || !mapActive) && (
-                    <Polygon positions={mapPoints.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
+                  {mapPoints.length > 1 && !viewingRecord && (
+                    <>
+                      {mapPoints.map((p, i, arr) => {
+                        if (i === 0) return null;
+                        const prev = arr[i - 1];
+                        return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
+                      })}
+                      {mapPoints.length > 2 && (mapCompleted || !mapActive) && (
+                        <Polygon positions={mapPoints.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -526,41 +593,71 @@ const App: React.FC = () => {
             <div className="flex flex-col gap-4 w-full max-w-sm">
               {view === 'track' ? (
                 <>
-                  <div className="pointer-events-auto flex justify-center">
+                  <div className="pointer-events-auto flex gap-2 w-full">
+                    {/* START/FINISH button now on the LEFT */}
                     <button 
                       onClick={() => {
                         setViewingRecord(null);
                         if (!trkActive) {
                           setTrkActive(true);
                           setTrkStart(pos);
+                          setTrkPivots([]);
                         } else {
                           setShowEndConfirm(true);
                         }
                       }}
-                      className={`w-full h-16 rounded-3xl font-black text-[10px] tracking-[0.3em] uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-4 ${trkActive ? 'bg-blue-600 animate-pulse text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
+                      className={`flex-1 h-14 rounded-3xl font-black text-[9px] tracking-widest uppercase border border-white/10 shadow-2xl transition-all flex items-center justify-center gap-2 ${trkActive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white active:scale-95'}`}
                     >
-                      <Navigation2 size={18} /> {viewingRecord ? 'Start live track' : (trkActive ? 'End Tracking' : 'Start new track')}
+                      <Navigation2 size={18} /> {viewingRecord ? 'LIVE' : (trkActive ? 'FINISH' : 'START')}
                     </button>
+
+                    {/* PIVOT buttons now on the RIGHT */}
+                    {trkActive && (
+                      <div className="flex flex-1 gap-2">
+                        {trkPivots.length > 0 ? (
+                           <button 
+                             onClick={undoPivot}
+                             className="flex-1 h-14 rounded-3xl bg-slate-800 border border-white/10 text-amber-400 font-black text-[9px] tracking-widest uppercase flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"
+                           >
+                             <Undo2 size={16} /> UNDO
+                           </button>
+                        ) : (
+                          <button 
+                            onClick={addPivot}
+                            disabled={trkPivots.length >= 3}
+                            className={`flex-1 h-14 rounded-3xl font-black text-[9px] tracking-widest uppercase border border-white/10 shadow-xl transition-all flex items-center justify-center gap-2 ${trkPivots.length >= 3 ? 'bg-slate-800 text-slate-500' : 'bg-blue-600 text-white active:scale-95'}`}
+                          >
+                            <Anchor size={16} /> 
+                            {trkPivots.length >= 3 ? 'MAX' : `PIVOT ${trkPivots.length + 1}/3`}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-3.5 w-full shadow-2xl">
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ARCHIVED LOG' : `GNSS ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
+                          {viewingRecord ? 'ARCHIVED LOG' : `ACCUMULATED ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}`}
                         </FitText>
-                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Hz Distance</span>
-                        <FitText maxFontSize={28} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
-                          {viewingRecord ? viewingRecord.primaryValue.replace(/[a-z²]/gi, '') : formatDist(currentShotDist, units)}
+                        <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Total Distance</span>
+                        <FitText maxFontSize={32} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
+                          {viewingRecord ? viewingRecord.primaryValue.replace(/[a-z²]/gi, '') : formatDist(accumulatedDist, units)}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </FitText>
+                        {(trkPivots.length > 0 || viewingRecord?.pivots?.length) && (
+                          <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest mt-1">
+                            LEG: {formatDist(currentLegDist, units)}{units === 'Yards' ? 'yd' : 'm'}
+                          </span>
+                        )}
                       </div>
-                      <div className="h-20 w-px bg-white/10 shrink-0"></div>
+                      <div className="h-20 w-px bg-white/10 shrink-0 mx-2"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ALTITUDE DATA' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`}
+                          {viewingRecord ? 'ALTITUDE DATA' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
-                        <FitText maxFontSize={28} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
+                        <FitText maxFontSize={32} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                           {viewingRecord ? viewingRecord.secondaryValue?.replace('Elev: ', '').replace(/[a-z²]/gi, '') : ((elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units))}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
                         </FitText>

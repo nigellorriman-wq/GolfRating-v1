@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Scottish Golf Course Rating Toolkit v2
 
-# Run and deploy your AI Studio app
+A high-precision measurement tool designed for personal golf course assessment.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1ZWlXLTcDyAe7KR6w8fyCu5hYIR85Ui5w
+### 1. Distance Tracker (with Pivots)
+- **Real-time GNSS Tracking**: Measures horizontal distance and elevation change.
+- **Pivot Points**: Support for up to 3 pivot points to measure dog-legs or multi-stage holes.
+- **Elevation Delta**: Tracks vertical movement from start to finish.
 
-## Run Locally
+### 2. Green Mapper
+- **Area Calculation**: Walk the perimeter of a green to calculate its total square footage/yardage.
+- **Bunker Integration**: Hold the "Bunker" button while walking specific sections to track bunker length and percentage of the total perimeter.
+- **Automatic Closing**: The tool detects when you've returned to the starting point to finalize the shape.
 
-**Prerequisites:**  Node.js
+## Tech Stack
+- **React / TypeScript**
+- **Leaflet**: High-performance mapping and satellite overlays.
+- **Tailwind CSS**: Modern, mobile-first UI.
+- **Lucide**: Clean iconography.
 
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Deployment
+This is a single-page application (SPA) that stores history locally on the device using `localStorage`.
