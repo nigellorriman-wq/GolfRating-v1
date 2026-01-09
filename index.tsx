@@ -123,7 +123,7 @@ const exportToKML = (history: SavedRecord[]) => {
       <description>Date: ${dateStr}\n${item.secondaryValue}</description>
       <styleUrl>#trackStyle</styleUrl>
       <LineString>
-        <altitudeMode>relativeToGround</altitudeMode>
+        <altitudeMode>clampToGround</altitudeMode>
         <coordinates>${coords}</coordinates>
       </LineString>
     </Placemark>`;
@@ -135,7 +135,7 @@ const exportToKML = (history: SavedRecord[]) => {
       <description>Date: ${dateStr}\n${item.secondaryValue}</description>
       <styleUrl>#greenStyle</styleUrl>
       <Polygon>
-        <altitudeMode>relativeToGround</altitudeMode>
+        <altitudeMode>clampToGround</altitudeMode>
         <outerBoundaryIs>
           <LinearRing>
             <coordinates>${coords}</coordinates>
@@ -494,7 +494,7 @@ const App: React.FC = () => {
                 <Navigation2 size={32} />
               </div>
               <h2 className="text-2xl font-black mb-2 uppercase italic" style={{ color: '#2563EB' }}>Distance tracker</h2>
-              <p className="text-white text-[11px] font-medium max-w-[200px] leading-relaxed">Realtime accumulated distance with pivot capability</p>
+              <p className="text-white text-[11px] font-medium max-w-[200px] width-full leading-relaxed">Realtime accumulated distance with pivot capability</p>
             </button>
 
             <button 
