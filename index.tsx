@@ -594,7 +594,7 @@ const App: React.FC = () => {
               {view === 'track' ? (
                 <>
                   <div className="pointer-events-auto flex gap-2 w-full">
-                    {/* START/FINISH button now on the LEFT */}
+                    {/* START/FINISH button */}
                     <button 
                       onClick={() => {
                         setViewingRecord(null);
@@ -611,26 +611,28 @@ const App: React.FC = () => {
                       <Navigation2 size={18} /> {viewingRecord ? 'LIVE' : (trkActive ? 'FINISH' : 'START')}
                     </button>
 
-                    {/* PIVOT buttons now on the RIGHT */}
+                    {/* PIVOT CONTROLS */}
                     {trkActive && (
-                      <div className="flex flex-1 gap-2">
-                        {trkPivots.length > 0 ? (
-                           <button 
-                             onClick={undoPivot}
-                             className="flex-1 h-14 rounded-3xl bg-slate-800 border border-white/10 text-amber-400 font-black text-[9px] tracking-widest uppercase flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"
-                           >
-                             <Undo2 size={16} /> UNDO
-                           </button>
-                        ) : (
+                      <div className="flex-[1.5] flex gap-2">
+                        {/* Undo button appears only if there are pivots */}
+                        {trkPivots.length > 0 && (
                           <button 
-                            onClick={addPivot}
-                            disabled={trkPivots.length >= 3}
-                            className={`flex-1 h-14 rounded-3xl font-black text-[9px] tracking-widest uppercase border border-white/10 shadow-xl transition-all flex items-center justify-center gap-2 ${trkPivots.length >= 3 ? 'bg-slate-800 text-slate-500' : 'bg-blue-600 text-white active:scale-95'}`}
+                            onClick={undoPivot}
+                            className="flex-1 h-14 rounded-3xl bg-slate-800 border border-white/10 text-amber-400 font-black text-[9px] tracking-widest uppercase flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl"
                           >
-                            <Anchor size={16} /> 
-                            {trkPivots.length >= 3 ? 'MAX' : `PIVOT ${trkPivots.length + 1}/3`}
+                            <Undo2 size={16} /> UNDO
                           </button>
                         )}
+                        
+                        {/* Pivot button: stays visible until 3 pivots reached */}
+                        <button 
+                          onClick={addPivot}
+                          disabled={trkPivots.length >= 3}
+                          className={`flex-[1.2] h-14 rounded-3xl font-black text-[9px] tracking-widest uppercase border border-white/10 shadow-xl transition-all flex items-center justify-center gap-2 ${trkPivots.length >= 3 ? 'bg-slate-800 text-slate-500' : 'bg-blue-600 text-white active:scale-95'}`}
+                        >
+                          <Anchor size={16} /> 
+                          {trkPivots.length >= 3 ? 'MAX' : `PIVOT ${trkPivots.length + 1}/3`}
+                        </button>
                       </div>
                     )}
                   </div>
