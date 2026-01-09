@@ -14,7 +14,8 @@ import {
   Ruler,
   Eye,
   Anchor,
-  Undo2
+  Undo2,
+  Download
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -78,6 +79,82 @@ const getAccuracyColor = (acc: number) => {
   if (acc < 3.5) return '#10b981'; 
   if (acc <= 8) return '#f59e0b';
   return '#ef4444';
+};
+
+const getFormattedTimestamp = () => {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const y = now.getFullYear();
+  const m = pad(now.getMonth() + 1);
+  const d = pad(now.getDate());
+  const h = pad(now.getHours());
+  const min = pad(now.getMinutes());
+  const s = pad(now.getSeconds());
+  return `${y}${m}${d}-${h}${min}${s}`;
+};
+
+const exportToKML = (history: SavedRecord[]) => {
+  if (history.length === 0) return;
+
+  const kmlHeader = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Golf Toolkit Export - ${new Date().toLocaleDateString()}</name>
+    <Style id="trackStyle">
+      <LineStyle><color>ffff0000</color><width>4</width></LineStyle>
+    </Style>
+    <Style id="greenStyle">
+      <PolyStyle><color>4d00ff00</color><fill>1</fill><outline>1</outline></PolyStyle>
+      <LineStyle><color>ff00ff00</color><width>2</width></LineStyle>
+    </Style>`;
+
+  const kmlFooter = `
+  </Document>
+</kml>`;
+
+  const placemarks = history.map(item => {
+    const dateStr = new Date(item.date).toLocaleString();
+    if (item.type === 'Track') {
+      const allPoints = [item.points[0], ...(item.pivots || []), item.points[1]];
+      const coords = allPoints.map(p => `${p.lng},${p.lat},${p.alt || 0}`).join(' ');
+      return `
+    <Placemark>
+      <name>Track: ${item.primaryValue}</name>
+      <description>Date: ${dateStr}\n${item.secondaryValue}</description>
+      <styleUrl>#trackStyle</styleUrl>
+      <LineString>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <coordinates>${coords}</coordinates>
+      </LineString>
+    </Placemark>`;
+    } else {
+      const coords = [...item.points, item.points[0]].map(p => `${p.lng},${p.lat},${p.alt || 0}`).join(' ');
+      return `
+    <Placemark>
+      <name>Green: ${item.primaryValue}</name>
+      <description>Date: ${dateStr}\n${item.secondaryValue}</description>
+      <styleUrl>#greenStyle</styleUrl>
+      <Polygon>
+        <altitudeMode>relativeToGround</altitudeMode>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>${coords}</coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>`;
+    }
+  }).join('');
+
+  const kmlContent = kmlHeader + placemarks + kmlFooter;
+  const blob = new Blob([kmlContent], { type: 'application/vnd.google-earth.kml+xml' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `golf-export-${getFormattedTimestamp()}.kml`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 /** --- COMPONENTS --- **/
@@ -438,9 +515,18 @@ const App: React.FC = () => {
           <footer className="mt-8 pb-4">
             {history.length > 0 && (
               <div className="mb-6">
-                <div className="flex items-center gap-2 mb-3 px-2">
-                  <HistoryIcon size={14} className="text-slate-600" />
-                  <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Session History</span>
+                <div className="flex items-center justify-between mb-3 px-2">
+                  <div className="flex items-center gap-2">
+                    <HistoryIcon size={14} className="text-slate-600" />
+                    <span className="text-[9px] font-black tracking-[0.2em] text-slate-500 uppercase">Session History</span>
+                  </div>
+                  <button 
+                    onClick={() => exportToKML(history)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/10 border border-blue-600/20 rounded-full active:scale-95 transition-all"
+                  >
+                    <Download size={12} className="text-blue-400" />
+                    <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest">Export KML</span>
+                  </button>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
                   {history.map(item => (
