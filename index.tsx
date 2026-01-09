@@ -863,25 +863,44 @@ const App: React.FC = () => {
             radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0);
           background-size: 40px 40px;
           position: relative;
+          z-index: 1;
         }
         
-        .fallback-map-bg::after {
+        /* The watermark is now a background layer of the leaflet container */
+        .leaflet-container.fallback-map-bg {
+          background-image: 
+            radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0),
+            linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+          background-size: 40px 40px, 100px 100px, 100px 100px;
+        }
+        
+        /* Fixed watermark to sit behind everything else */
+        .fallback-map-bg::before {
           content: "NO MAPPING DATA";
           position: absolute;
-          top: 0; left: 0; right: 0; bottom: 0;
+          top: 0; left: 0; width: 100%; height: 100%;
           display: flex;
           align-items: center;
           justify-content: center;
           font-family: system-ui, sans-serif;
           font-weight: 900;
           font-size: 8vw;
-          color: rgba(0, 0, 0, 0.05);
+          color: rgba(0, 0, 0, 0.03); /* More subtle */
           letter-spacing: 0.5em;
           pointer-events: none;
           white-space: nowrap;
           transform: rotate(-30deg);
-          z-index: 400;
+          z-index: 0; /* Behind map panes */
           text-align: center;
+        }
+
+        /* Ensure Leaflet panes are above our custom background but below markers */
+        .leaflet-pane {
+          z-index: 400;
+        }
+        .leaflet-tile-pane {
+          z-index: 200;
         }
       `}</style>
     </div>
