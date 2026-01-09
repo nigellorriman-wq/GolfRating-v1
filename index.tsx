@@ -494,7 +494,7 @@ const App: React.FC = () => {
                 <Navigation2 size={32} />
               </div>
               <h2 className="text-2xl font-black mb-2 uppercase italic" style={{ color: '#2563EB' }}>Distance tracker</h2>
-              <p className="text-white text-[11px] font-medium max-w-[200px] width-full leading-relaxed">Realtime accumulated distance with pivot capability</p>
+              <p className="text-white text-[11px] font-medium max-w-[200px] leading-relaxed">Realtime accumulated distance with pivot capability</p>
             </button>
 
             <button 
@@ -586,7 +586,7 @@ const App: React.FC = () => {
           </div>
 
           <main className="flex-1">
-            <MapContainer center={[0, 0]} zoom={2} className="h-full w-full" zoomControl={false} attributionControl={false}>
+            <MapContainer center={[0, 0]} zoom={2} className="h-full w-full fallback-map-bg" zoomControl={false} attributionControl={false}>
               <TileLayer 
                 url={mapStyle === 'Street' ? "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" : "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"} 
                 maxZoom={22} 
@@ -856,6 +856,33 @@ const App: React.FC = () => {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+        
+        .fallback-map-bg {
+          background-color: #d1fae5 !important; /* lightgreen */
+          background-image: 
+            radial-gradient(rgba(0,0,0,0.02) 1px, transparent 0);
+          background-size: 40px 40px;
+          position: relative;
+        }
+        
+        .fallback-map-bg::after {
+          content: "NO MAPPING DATA";
+          position: absolute;
+          top: 0; left: 0; right: 0; bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: system-ui, sans-serif;
+          font-weight: 900;
+          font-size: 8vw;
+          color: rgba(0, 0, 0, 0.05);
+          letter-spacing: 0.5em;
+          pointer-events: none;
+          white-space: nowrap;
+          transform: rotate(-30deg);
+          z-index: 400;
+          text-align: center;
+        }
       `}</style>
     </div>
   );
