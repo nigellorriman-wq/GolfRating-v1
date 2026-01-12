@@ -31,7 +31,7 @@ const USER_MANUAL = [
   {
     title: "Quick Start",
     icon: <BookOpen className="text-blue-400" />,
-    content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking."
+    content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking. The App is web-based, so an internet connection is required to launch, but if you lose connection the App will still work, but you may lose the background mapping."
   },
   {
     title: "Distance Tracker",
@@ -57,6 +57,11 @@ const USER_MANUAL = [
     title: "Data export",
     icon: <BookOpen className="text-yellow-400" />,
     content: "Whenever you save a track or green area, the data appears at the bottom of the homescreen. Select a result and it will show you the results again. Hitting the bin icon will delete an individual record. You can also save all results to a KML file, which will be stored in your downloads folder. The filename will be the current date and time. KML files can be opened in GIS packages, such as Google Earth or Google Maps for analysis and archiving purposes."
+  },
+  {
+    title: "Help and suggestions",
+    icon: <Eye className="text-red-400" />,
+    content: "This App is under development. If you require assistance or have any suggestions, please email me at nigel.lorriman@gmail.com"
   }
 ];
 
