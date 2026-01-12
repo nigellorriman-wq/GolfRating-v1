@@ -15,7 +15,8 @@ import {
   Eye,
   Anchor,
   Undo2,
-  Download
+  Download,
+  Activity
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -200,10 +201,13 @@ const FitText: React.FC<{ children: React.ReactNode; className?: string; maxFont
 const MapController: React.FC<{ 
   pos: GeoPoint | null, 
   active: boolean, 
+  trkStart: GeoPoint | null,
+  trkPivots: GeoPoint[],
   mapPoints: GeoPoint[], 
   completed: boolean,
-  viewingRecord: SavedRecord | null
-}> = ({ pos, active, mapPoints, completed, viewingRecord }) => {
+  viewingRecord: SavedRecord | null,
+  mode: AppView
+}> = ({ pos, active, trkStart, trkPivots, mapPoints, completed, viewingRecord, mode }) => {
   const map = useMap();
   const centeredOnce = useRef(false);
   const fittedCompleted = useRef(false);
@@ -220,6 +224,7 @@ const MapController: React.FC<{
   }, [active]);
 
   useEffect(() => {
+    // 1. If viewing a record from history, fit the entire record
     if (viewingRecord && viewingRecord.points.length > 0) {
       const bounds = L.latLngBounds(viewingRecord.points.map(p => [p.lat, p.lng]));
       if (viewingRecord.pivots) {
@@ -229,7 +234,8 @@ const MapController: React.FC<{
       return;
     }
 
-    if (completed && mapPoints.length > 2) {
+    // 2. If Green Mapping is completed, fit the green
+    if (completed && mode === 'green' && mapPoints.length > 2) {
       if (!fittedCompleted.current) {
         const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
         map.fitBounds(bounds, { padding: [50, 50], animate: true });
@@ -238,6 +244,23 @@ const MapController: React.FC<{
       return; 
     }
 
+    // 3. Dynamic Tracking Zoom (The "Fix"): Fit Start and End
+    if (mode === 'track' && active && trkStart && pos) {
+      const bounds = L.latLngBounds([trkStart.lat, trkStart.lng], [pos.lat, pos.lng]);
+      trkPivots.forEach(p => bounds.extend([p.lat, p.lng]));
+      
+      // We only want to force fitting bounds if they are far enough apart
+      // otherwise small movements create jitter. 20m threshold.
+      const dist = calculateDistance(trkStart, pos);
+      if (dist > 20) {
+        map.fitBounds(bounds, { padding: [80, 80], animate: true, maxZoom: 19 });
+      } else {
+        map.setView([pos.lat, pos.lng], 19, { animate: true });
+      }
+      return;
+    }
+
+    // 4. Default centering for everything else
     if (pos && active && !completed) {
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
@@ -245,7 +268,7 @@ const MapController: React.FC<{
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
     }
-  }, [pos, active, map, completed, mapPoints, viewingRecord]);
+  }, [pos, active, map, completed, mapPoints, viewingRecord, mode, trkStart, trkPivots]);
 
   return null;
 };
@@ -303,6 +326,17 @@ const App: React.FC = () => {
     }
 
     if (!navigator.geolocation) return;
+    
+    if (typeof (DeviceMotionEvent as any).requestPermission === 'function') {
+      (DeviceMotionEvent as any).requestPermission()
+        .then((permissionState: string) => {
+          if (permissionState === 'granted') {
+            console.debug("Sensor permission granted");
+          }
+        })
+        .catch(console.error);
+    }
+
     const watch = navigator.geolocation.watchPosition(
       (p) => {
         const pt: GeoPoint = {
@@ -310,7 +344,7 @@ const App: React.FC = () => {
           lng: p.coords.longitude, 
           alt: p.coords.altitude, 
           accuracy: p.coords.accuracy, 
-          altAccuracy: p.coords.altitudeAccuracy,
+          altAccuracy: p.coords.altitudeAccuracy, 
           timestamp: Date.now()
         };
         setPos(pt);
@@ -334,7 +368,7 @@ const App: React.FC = () => {
       }
     }
 
-    const isClosed = mapCompleted || calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 1.0;
+    const isClosed = mapCompleted || (mapPoints.length > 2 && calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 1.0);
     if (isClosed && mapPoints.length > 2) {
       perimeter += calculateDistance(mapPoints[mapPoints.length-1], mapPoints[0]);
     }
@@ -391,7 +425,6 @@ const App: React.FC = () => {
     if (viewingRecord?.id === id) setViewingRecord(null);
   };
 
-  /** --- PIVOT TRACKING LOGIC --- **/
   const currentLegDist = useMemo(() => {
     if (!pos || !trkStart) return 0;
     const lastPivot = trkPivots[trkPivots.length - 1];
@@ -447,6 +480,13 @@ const App: React.FC = () => {
   const undoPivot = () => {
     setTrkPivots(trkPivots.slice(0, -1));
   };
+
+  const isVerticalLocked = pos?.altAccuracy !== null && pos?.altAccuracy < 5;
+  const verticalAccuracyLabel = useMemo(() => {
+    if (!pos) return 'SEARCHING...';
+    if (pos.altAccuracy === null || pos.altAccuracy === 0) return 'GNSS 3D ESTIMATE';
+    return `±${(pos.altAccuracy * (units === 'Yards' ? 3.28 : 1)).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`;
+  }, [pos, units]);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
@@ -596,9 +636,12 @@ const App: React.FC = () => {
               <MapController 
                 pos={pos} 
                 active={trkActive || mapActive} 
+                trkStart={trkStart}
+                trkPivots={trkPivots}
                 mapPoints={mapPoints} 
                 completed={mapCompleted}
                 viewingRecord={viewingRecord}
+                mode={view}
               />
               
               {pos && (view !== 'green' || !mapCompleted) && !viewingRecord && (
@@ -655,6 +698,11 @@ const App: React.FC = () => {
                         const prev = arr[i - 1];
                         return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
                       })}
+                      <Polyline 
+                        positions={[[viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng], [viewingRecord.points[0].lat, viewingRecord.points[0].lng]]} 
+                        color={viewingRecord.points[0].type === 'bunker' ? '#f59e0b' : '#10b981'} 
+                        weight={5} 
+                      />
                       <Polygon positions={viewingRecord.points.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
                     </>
                   )}
@@ -666,6 +714,13 @@ const App: React.FC = () => {
                         const prev = arr[i - 1];
                         return <Polyline key={i} positions={[[prev.lat, prev.lng], [p.lat, p.lng]]} color={p.type === 'bunker' ? '#f59e0b' : '#10b981'} weight={p.type === 'bunker' ? 7 : 5} />;
                       })}
+                      {mapPoints.length > 2 && (mapCompleted || calculateDistance(mapPoints[mapPoints.length - 1], mapPoints[0]) < 1.0) && (
+                        <Polyline 
+                          positions={[[mapPoints[mapPoints.length - 1].lat, mapPoints[mapPoints.length - 1].lng], [mapPoints[0].lat, mapPoints[0].lng]]} 
+                          color={mapPoints[0].type === 'bunker' ? '#f59e0b' : '#10b981'} 
+                          weight={5} 
+                        />
+                      )}
                       {mapPoints.length > 2 && (mapCompleted || !mapActive) && (
                         <Polygon positions={mapPoints.map(p => [p.lat, p.lng])} fillColor="#10b981" fillOpacity={0.2} weight={0} />
                       )}
@@ -681,7 +736,6 @@ const App: React.FC = () => {
               {view === 'track' ? (
                 <>
                   <div className="pointer-events-auto flex gap-2 w-full">
-                    {/* START/FINISH button */}
                     <button 
                       onClick={() => {
                         setViewingRecord(null);
@@ -698,10 +752,8 @@ const App: React.FC = () => {
                       <Navigation2 size={18} /> {viewingRecord ? 'LIVE' : (trkActive ? 'FINISH' : 'START')}
                     </button>
 
-                    {/* PIVOT CONTROLS */}
                     {trkActive && (
                       <div className="flex-[1.5] flex gap-2">
-                        {/* Undo button appears only if there are pivots */}
                         {trkPivots.length > 0 && (
                           <button 
                             onClick={undoPivot}
@@ -710,8 +762,6 @@ const App: React.FC = () => {
                             <Undo2 size={16} /> UNDO
                           </button>
                         )}
-                        
-                        {/* Pivot button: stays visible until 3 pivots reached */}
                         <button 
                           onClick={addPivot}
                           disabled={trkPivots.length >= 3}
@@ -727,7 +777,7 @@ const App: React.FC = () => {
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ARCHIVED LOG' : `ACCUMULATED ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}`}
+                          {viewingRecord ? 'ARCHIVED LOG' : `WGS84 ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Total Distance</span>
                         <FitText maxFontSize={32} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
@@ -743,7 +793,7 @@ const App: React.FC = () => {
                       <div className="h-20 w-px bg-white/10 shrink-0 mx-2"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ALTITUDE DATA' : `WGS84 ±${(pos?.altAccuracy ? pos.altAccuracy * (units === 'Yards' ? 3.28 : 1) : 0).toFixed(1)}`}
+                          {viewingRecord ? 'ALTITUDE DATA' : `VERT ${verticalAccuracyLabel}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
                         <FitText maxFontSize={32} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
@@ -752,6 +802,14 @@ const App: React.FC = () => {
                         </FitText>
                       </div>
                     </div>
+                    {!viewingRecord && (
+                      <div className="mt-3 flex items-center justify-center gap-2 border-t border-white/5 pt-2">
+                        <Activity size={10} className={isVerticalLocked ? 'text-emerald-400' : 'text-slate-500'} />
+                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isVerticalLocked ? 'text-emerald-400' : 'text-slate-500'}`}>
+                          {isVerticalLocked ? 'Barometer Active' : (pos?.alt ? 'GNSS 3D Active' : 'Vertical Locked (Searching)')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -767,7 +825,6 @@ const App: React.FC = () => {
                             setMapActive(false);
                             return;
                           }
-
                           if (!mapActive) {
                             setMapPoints(pos ? [pos] : []);
                             setMapActive(true);
@@ -819,7 +876,7 @@ const App: React.FC = () => {
                       <div className="bg-white/[0.03] p-1.5 rounded-3xl border border-white/5 text-center">
                         <span className="text-slate-500 text-[8px] font-black uppercase block mb-0.5 tracking-widest">BUNKER LEN</span>
                         <div className="text-2xl font-black text-orange-400 tabular-nums leading-none">
-                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.perimeter, units) : '--')}
+                          {viewingRecord ? '--' : (areaMetrics ? formatDist(areaMetrics.bunkerLength, units) : '--')}
                           <span className="text-[9px] ml-0.5 opacity-50 uppercase">{units === 'Yards' ? 'yd' : 'm'}</span>
                         </div>
                       </div>
@@ -858,9 +915,8 @@ const App: React.FC = () => {
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .text-glow-emerald { text-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
         
-        /* The container now holds the fallback UI */
         .custom-map-container {
-          background-color: #d1fae5 !important; /* Fairway green base */
+          background-color: #d1fae5 !important;
           background-image: 
             linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
             linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
@@ -868,7 +924,6 @@ const App: React.FC = () => {
           position: relative;
         }
 
-        /* Watermark as a true background element of the Leaflet container */
         .custom-map-container::before {
           content: "NO MAPPING DATA";
           position: absolute;
@@ -886,12 +941,10 @@ const App: React.FC = () => {
           text-align: center;
         }
 
-        /* Ensure tiles hide the background entirely */
         .opaque-tile-layer {
           z-index: 50;
         }
 
-        /* Leaflet panes containing markers and lines must be on top of tiles */
         .leaflet-pane {
           z-index: 400 !important;
         }
