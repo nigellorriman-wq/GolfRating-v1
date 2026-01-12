@@ -16,7 +16,8 @@ import {
   Anchor,
   Undo2,
   Download,
-  Activity
+  Activity,
+  Cpu
 } from 'lucide-react';
 
 /** --- TYPES --- **/
@@ -224,7 +225,6 @@ const MapController: React.FC<{
   }, [active]);
 
   useEffect(() => {
-    // 1. If viewing a record from history, fit the entire record
     if (viewingRecord && viewingRecord.points.length > 0) {
       const bounds = L.latLngBounds(viewingRecord.points.map(p => [p.lat, p.lng]));
       if (viewingRecord.pivots) {
@@ -234,7 +234,6 @@ const MapController: React.FC<{
       return;
     }
 
-    // 2. If Green Mapping is completed, fit the green
     if (completed && mode === 'green' && mapPoints.length > 2) {
       if (!fittedCompleted.current) {
         const bounds = L.latLngBounds(mapPoints.map(p => [p.lat, p.lng]));
@@ -244,13 +243,9 @@ const MapController: React.FC<{
       return; 
     }
 
-    // 3. Dynamic Tracking Zoom (The "Fix"): Fit Start and End
     if (mode === 'track' && active && trkStart && pos) {
       const bounds = L.latLngBounds([trkStart.lat, trkStart.lng], [pos.lat, pos.lng]);
       trkPivots.forEach(p => bounds.extend([p.lat, p.lng]));
-      
-      // We only want to force fitting bounds if they are far enough apart
-      // otherwise small movements create jitter. 20m threshold.
       const dist = calculateDistance(trkStart, pos);
       if (dist > 20) {
         map.fitBounds(bounds, { padding: [80, 80], animate: true, maxZoom: 19 });
@@ -260,7 +255,6 @@ const MapController: React.FC<{
       return;
     }
 
-    // 4. Default centering for everything else
     if (pos && active && !completed) {
       map.setView([pos.lat, pos.lng], 19, { animate: true });
       centeredOnce.current = true;
@@ -481,12 +475,24 @@ const App: React.FC = () => {
     setTrkPivots(trkPivots.slice(0, -1));
   };
 
-  const isVerticalLocked = pos?.altAccuracy !== null && pos?.altAccuracy < 5;
-  const verticalAccuracyLabel = useMemo(() => {
+  // REFINED SENSOR DIAGNOSTICS
+  const altPrecision = pos?.altAccuracy ?? null;
+  const isBarometerActive = altPrecision !== null && altPrecision > 0 && altPrecision < 5.0;
+  const isGNSS3D = altPrecision !== null && altPrecision >= 5.0;
+  
+  const verticalAccuracyDisplay = useMemo(() => {
     if (!pos) return 'SEARCHING...';
-    if (pos.altAccuracy === null || pos.altAccuracy === 0) return 'GNSS 3D ESTIMATE';
-    return `±${(pos.altAccuracy * (units === 'Yards' ? 3.28 : 1)).toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`;
-  }, [pos, units]);
+    if (altPrecision === null || altPrecision === 0) return 'ESTIMATE';
+    // Convert current precision based on units for the UI
+    const precisionVal = altPrecision * (units === 'Yards' ? 3.28084 : 1);
+    return `±${precisionVal.toFixed(1)}${units === 'Yards' ? 'ft' : 'm'}`;
+  }, [pos, units, altPrecision]);
+
+  const sensorLabel = useMemo(() => {
+    if (isBarometerActive) return 'BAROMETRIC';
+    if (isGNSS3D) return 'GNSS 3D';
+    return 'ESTIMATED';
+  }, [isBarometerActive, isGNSS3D]);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
@@ -777,7 +783,7 @@ const App: React.FC = () => {
                     <div className="flex items-center justify-around gap-2">
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ARCHIVED LOG' : `WGS84 ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
+                          {viewingRecord ? 'ARCHIVED LOG' : `HORIZ ±${(pos?.accuracy ? pos.accuracy * (units === 'Yards' ? 1.09 : 1) : 0).toFixed(1)}${units === 'Yards' ? 'yd' : 'm'}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Total Distance</span>
                         <FitText maxFontSize={32} className="font-black text-emerald-400 tabular-nums leading-none tracking-tighter text-glow-emerald">
@@ -793,20 +799,28 @@ const App: React.FC = () => {
                       <div className="h-20 w-px bg-white/10 shrink-0 mx-2"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
                         <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
-                          {viewingRecord ? 'ALTITUDE DATA' : `VERT ${verticalAccuracyLabel}`}
+                          {viewingRecord ? 'ALTITUDE DATA' : `VERT ${verticalAccuracyDisplay}`}
                         </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest block mb-1 opacity-40">Elev change</span>
                         <FitText maxFontSize={32} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">
                           {viewingRecord ? viewingRecord.secondaryValue?.replace('Elev: ', '').replace(/[a-z²]/gi, '') : ((elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units))}
                           <span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span>
                         </FitText>
+                        {!viewingRecord && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Cpu size={10} className={isBarometerActive ? 'text-blue-400' : 'text-slate-500'} />
+                            <span className={`text-[8px] font-black uppercase tracking-widest ${isBarometerActive ? 'text-blue-400' : 'text-slate-500'}`}>
+                              {sensorLabel}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     {!viewingRecord && (
                       <div className="mt-3 flex items-center justify-center gap-2 border-t border-white/5 pt-2">
-                        <Activity size={10} className={isVerticalLocked ? 'text-emerald-400' : 'text-slate-500'} />
-                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isVerticalLocked ? 'text-emerald-400' : 'text-slate-500'}`}>
-                          {isVerticalLocked ? 'Barometer Active' : (pos?.alt ? 'GNSS 3D Active' : 'Vertical Locked (Searching)')}
+                        <Activity size={10} className={isBarometerActive ? 'text-blue-400' : (isGNSS3D ? 'text-emerald-400' : 'text-amber-500')} />
+                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isBarometerActive ? 'text-blue-400' : (isGNSS3D ? 'text-emerald-400' : 'text-amber-500')}`}>
+                          {isBarometerActive ? 'Barometer Lock Active' : (isGNSS3D ? 'GNSS 3D Fix Active' : 'Vertical Fix Searching')}
                         </span>
                       </div>
                     )}
