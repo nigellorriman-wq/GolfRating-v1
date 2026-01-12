@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
@@ -21,19 +22,20 @@ import {
   BookOpen,
   X,
   CheckCircle2,
-  Info
+  Info,
+Home
 } from 'lucide-react';
 
 /** --- DOCUMENTATION CONTENT --- **/
 const USER_MANUAL = [
   {
     title: "Quick Start",
-    icon: <Navigation2 className="text-blue-400" />,
+    icon: <BookOpen className="text-blue-400" />,
     content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking."
   },
   {
     title: "Distance Tracker",
-    icon: <Ruler className="text-blue-400" />,
+    icon: <Navigation2 className="text-blue-400" />,
     content: "Tap 'Start' when you are ready to start tracking the distance. Use 'Pivot' (max 3) at dog-leg corners to measure the true path of the hole. Total distance and elevation change are calculated from the start through all pivots to your current position."
   },
   {
@@ -53,7 +55,7 @@ const USER_MANUAL = [
   },
   {
     title: "Data export",
-    icon: <Cpu className="text-yellow-400" />,
+    icon: <BookOpen className="text-yellow-400" />,
     content: "Whenever you save a track or green area, the data appears at the bottom of the homescreen. Select a result and it will show you the results again. Hitting the bin icon will delete an individual record. You can also save all results to a KML file, which will be stored in your downloads folder. The filename will be the current date and time. KML files can be opened in GIS packages, such as Google Earth or Google Maps for analysis and archiving purposes."
   }
 ];
@@ -90,7 +92,7 @@ const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
   const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(lat1) * Math.cos(lat2) *
+    Math.cos(lat1) * Math.cos(lat2) +
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -382,9 +384,13 @@ const App: React.FC = () => {
   }, [trkStart, trkPivots, pos]);
 
   const elevDelta = (pos && trkStart && pos.alt !== null && trkStart.alt !== null) ? (pos.alt - trkStart.alt) : 0;
+  
+  // SENSOR DIAGNOSTICS LOGIC
   const altPrecision = pos?.altAccuracy ?? null;
-  const isBarometerActive = altPrecision !== null && altPrecision > 0 && altPrecision < 5.0;
-  const isGNSS3D = altPrecision !== null && altPrecision >= 5.0;
+  // iPhone Barometer fused lock is typically < 4 meters. GNSS only is often > 15 meters.
+  const isBarometerActive = altPrecision !== null && altPrecision > 0 && altPrecision <= 4.1;
+  const isGNSS3D = altPrecision !== null && altPrecision > 4.1;
+  const sensorSource = isBarometerActive ? 'BAROMETRIC' : (isGNSS3D ? 'GNSS 3D' : 'ESTIMATED');
 
   return (
     <div className="flex flex-col h-full w-full bg-[#020617] text-white overflow-hidden touch-none absolute inset-0 select-none">
@@ -468,10 +474,11 @@ const App: React.FC = () => {
               {view === 'track' && (
                 <>
                   {viewingRecord?.type === 'Track' && viewingRecord.points.length >= 2 && (
-                    <><CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{viewingRecord.pivots?.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[viewingRecord.points[0].lat, viewingRecord.points[0].lng], ...(viewingRecord.pivots?.map(p => [p.lat, p.lng]) || []), [viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng]]} color="#3b82f6" weight={5} /></>
+                    <><CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{viewingRecord.pivots?.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[viewingRecord.points[0].lat, viewingRecord.points[0].lng] as [number, number], ...(viewingRecord.pivots?.map(p => [p.lat, p.lng] as [number, number]) || []), [viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng] as [number, number]]} color="#3b82f6" weight={5} /></>
                   )}
                   {trkStart && pos && !viewingRecord && (
-                    <><CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{trkPivots.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[trkStart.lat, trkStart.lng], ...trkPivots.map(p => [p.lat, p.lng]), [pos.lat, pos.lng]]} color="#3b82f6" weight={5} /></>
+                    // Fix: Explicitly type coordinates as [number, number] for Polyline positions
+                    <><CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{trkPivots.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[trkStart.lat, trkStart.lng] as [number, number], ...trkPivots.map(p => [p.lat, p.lng] as [number, number]), [pos.lat, pos.lng] as [number, number]]} color="#3b82f6" weight={5} /></>
                   )}
                 </>
               )}
@@ -515,12 +522,29 @@ const App: React.FC = () => {
                       </div>
                       <div className="h-20 w-px bg-white/10 shrink-0 mx-2"></div>
                       <div className="flex-1 min-w-0 text-center flex flex-col items-center">
-                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">{viewingRecord ? 'ALTITUDE' : `VERT ±${pos?.altAccuracy ? (pos.altAccuracy * (units === 'Yards' ? 3.28 : 1)).toFixed(1) : '--'}${units === 'Yards' ? 'ft' : 'm'}`}</FitText>
+                        <FitText maxFontSize={11} className="font-black text-white uppercase tracking-tighter mb-1">
+                          {viewingRecord ? 'ALTITUDE' : `VERT ±${pos?.altAccuracy ? (pos.altAccuracy * (units === 'Yards' ? 3.28 : 1)).toFixed(1) : '--'}${units === 'Yards' ? 'ft' : 'm'}`}
+                        </FitText>
                         <span className="text-[10px] font-black text-white uppercase tracking-widest opacity-40 mb-1">Elev change</span>
                         <FitText maxFontSize={32} className="font-black text-amber-400 tabular-nums leading-none tracking-tighter">{viewingRecord ? viewingRecord.secondaryValue?.replace('Elev: ', '').replace(/[a-z²]/gi, '') : ((elevDelta >= 0 ? '+' : '') + formatAlt(elevDelta, units))}<span className="text-[12px] ml-1 font-bold opacity-40 uppercase">{units === 'Yards' ? 'ft' : 'm'}</span></FitText>
-                        {!viewingRecord && <div className="flex items-center gap-1 mt-1"><Cpu size={10} className={isBarometerActive ? 'text-blue-400' : 'text-slate-500'} /><span className={`text-[8px] font-black uppercase tracking-widest ${isBarometerActive ? 'text-blue-400' : 'text-slate-500'}`}>{isBarometerActive ? 'BAROMETRIC' : (isGNSS3D ? 'GNSS 3D' : 'ESTIMATED')}</span></div>}
+                        {!viewingRecord && (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Cpu size={10} className={isBarometerActive ? 'text-blue-400' : 'text-slate-500'} />
+                            <span className={`text-[8px] font-black uppercase tracking-widest ${isBarometerActive ? 'text-blue-400' : 'text-slate-500'}`}>
+                              {sensorSource}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
+                    {!viewingRecord && (
+                      <div className="mt-3 flex items-center justify-center gap-2 border-t border-white/5 pt-2">
+                        <Activity size={10} className={isBarometerActive ? 'text-blue-400' : (isGNSS3D ? 'text-emerald-400' : 'text-amber-500')} />
+                        <span className={`text-[8px] font-black uppercase tracking-[0.2em] ${isBarometerActive ? 'text-blue-400' : (isGNSS3D ? 'text-emerald-400' : 'text-amber-500')}`}>
+                          {isBarometerActive ? 'Barometer Feed Active' : (isGNSS3D ? 'GNSS 3D Lock Active' : 'Searching Vertical Fix')}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
