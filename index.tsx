@@ -36,7 +36,7 @@ const USER_MANUAL = [
   {
     title: "Distance Tracker",
     icon: <Navigation2 className="text-blue-400" />,
-    content: "Tap 'Start' when you are ready to start tracking the distance. Use 'Pivot' (max 3) at dog-leg corners to measure the true path of the hole. Total distance and elevation change are calculated from the start through all pivots to your current position."
+    content: "Tap 'Start' when you are ready to start tracking the distance. Use 'Pivot' (max 3) at dog-leg corners to measure the true path of the hole. Total distance and elevation change are calculated from the start through all pivots to your current position. GNSS (GPS) is really only accurate to 2m at best, so keep an eye on the Horiz value and the indicative coloured circle around the current location. It shows you the absolute positioning accuracy of the GPS, however, don't confuse this with the accuracy of distance measurements. They will always be better than this as they are relative to each other."
   },
   {
     title: "Green Mapper",
