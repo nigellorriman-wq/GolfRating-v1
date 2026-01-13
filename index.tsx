@@ -31,7 +31,7 @@ const USER_MANUAL = [
   {
     title: "Quick Start",
     icon: <BookOpen className="text-white-400" />,
-    content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking. The App is web-based, so an internet connection is required to launch, but if you lose connection the App will still work, but you may lose the background mapping."
+    content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking. The App is web-based, so an internet connection is required to launch, but if you lose connection the App will still work, though you may lose the background mapping."
   },
   {
     title: "Distance Tracker",
@@ -496,7 +496,6 @@ const App: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-[1000] p-4 pointer-events-none flex justify-between items-start">
             <button onClick={() => { setView('landing'); setTrkActive(false); setMapActive(false); setMapCompleted(false); setViewingRecord(null); setTrkPivots([]); }} className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 px-5 py-3 rounded-full flex items-center gap-3 shadow-2xl active:scale-95 transition-all"><ChevronLeft size={20} className="text-emerald-400" /><span className="text-[11px] font-black uppercase tracking-[0.2em]">Home</span></button>
             <div className="flex gap-2">
-              <button onClick={() => setShowManual(true)} className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full active:scale-95 transition-all"><Info size={22} className="text-blue-400" /></button>
               <button onClick={() => setUnits(u => u === 'Yards' ? 'Metres' : 'Yards')} className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full active:scale-95 transition-all"><Ruler size={22} className="text-emerald-400" /></button>
               <button onClick={() => setMapStyle(s => s === 'Street' ? 'Satellite' : 'Street')} className="pointer-events-auto bg-[#0f172a]/95 backdrop-blur-xl border border-white/10 p-3.5 rounded-full active:scale-95 transition-all"><Layers size={22} className={mapStyle === 'Satellite' ? 'text-blue-400' : 'text-slate-400'} /></button>
             </div>
