@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MapContainer, TileLayer, CircleMarker, Polyline, Circle, useMap, Polygon } from 'react-leaflet';
@@ -23,14 +22,15 @@ import {
   X,
   CheckCircle2,
   Info,
-Home
+  Home,
+  Type
 } from 'lucide-react';
 
 /** --- DOCUMENTATION CONTENT --- **/
 const USER_MANUAL = [
   {
     title: "Quick Start",
-    icon: <BookOpen className="text-blue-400" />,
+    icon: <BookOpen className="text-white-400" />,
     content: "Scottish Golf v2 is designed to provide an alternative to roadwheels and barometers when rating a course. Ensure 'High Accuracy' location is enabled on your device. For best results, keep the app active and in-hand while walking. The App is web-based, so an internet connection is required to launch, but if you lose connection the App will still work, but you may lose the background mapping."
   },
   {
@@ -97,7 +97,7 @@ const calculateDistance = (p1: {lat: number, lng: number}, p2: {lat: number, lng
   const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
   const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
   const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(lat1) * Math.cos(lat2) +
+    Math.cos(lat1) * Math.cos(lat2) *
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
@@ -168,33 +168,66 @@ const exportToKML = (history: SavedRecord[]) => {
 
 /** --- COMPONENTS --- **/
 
-const ManualModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-  <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-    <div className="bg-[#0f172a] w-full max-w-sm rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh] shadow-2xl overflow-hidden">
-      <div className="p-6 border-b border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <BookOpen size={20} className="text-blue-400" />
-          <h2 className="text-sm font-black uppercase tracking-widest text-white">User Manual</h2>
-        </div>
-        <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 active:scale-95 transition-all"><X size={20} /></button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
-        {USER_MANUAL.map((item, idx) => (
-          <div key={idx} className="bg-white/[0.03] p-5 rounded-3xl border border-white/5">
-            <div className="flex items-center gap-3 mb-2">
-              {item.icon}
-              <h3 className="text-[10px] font-black uppercase tracking-widest text-white">{item.title}</h3>
-            </div>
-            <p className="text-slate-400 text-[11px] leading-relaxed font-medium">{item.content}</p>
+const ManualModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [fontScale, setFontScale] = useState(1); // 1: Standard, 1.25: Large, 1.5: XL
+
+  const toggleScale = () => {
+    setFontScale(prev => {
+      if (prev === 1) return 1.25;
+      if (prev === 1.25) return 1.5;
+      return 1;
+    });
+  };
+
+  const getScaleLabel = () => {
+    if (fontScale === 1) return "1x";
+    if (fontScale === 1.25) return "1.25x";
+    return "1.5x";
+  };
+
+  return (
+    <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-[#0f172a] w-full max-w-sm rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh] shadow-2xl overflow-hidden">
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen size={20} className="text-blue-400" />
+            <h2 className="text-sm font-black uppercase tracking-widest text-white">User Manual</h2>
           </div>
-        ))}
-        <div className="text-center pb-4">
-          <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Version 2.0.4 | Personal Edition</p>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={toggleScale}
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-full text-blue-400 active:scale-95 transition-all border border-blue-400/20"
+              title="Increase Font Size"
+            >
+              <Type size={16} />
+              <span className="text-[10px] font-black">{getScaleLabel()}</span>
+            </button>
+            <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 active:scale-95 transition-all"><X size={20} /></button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
+          {USER_MANUAL.map((item, idx) => (
+            <div key={idx} className="bg-white/[0.03] p-5 rounded-3xl border border-white/5">
+              <div className="flex items-center gap-3 mb-2">
+                {item.icon}
+                <h3 className="font-black uppercase tracking-widest text-white" style={{ fontSize: `${10 * fontScale}px` }}>{item.title}</h3>
+              </div>
+              <p 
+                className="text-slate-400 leading-relaxed font-medium" 
+                style={{ fontSize: `${11 * fontScale}px` }}
+              >
+                {item.content}
+              </p>
+            </div>
+          ))}
+          <div className="text-center pb-4">
+            <p className="text-[8px] font-black text-slate-600 uppercase tracking-widest">Version 2.0.4 | Personal Edition</p>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const FitText: React.FC<{ children: React.ReactNode; className?: string; maxFontSize: number }> = ({ children, className, maxFontSize }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -482,7 +515,6 @@ const App: React.FC = () => {
                     <><CircleMarker center={[viewingRecord.points[0].lat, viewingRecord.points[0].lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{viewingRecord.pivots?.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[viewingRecord.points[0].lat, viewingRecord.points[0].lng] as [number, number], ...(viewingRecord.pivots?.map(p => [p.lat, p.lng] as [number, number]) || []), [viewingRecord.points[viewingRecord.points.length-1].lat, viewingRecord.points[viewingRecord.points.length-1].lng] as [number, number]]} color="#3b82f6" weight={5} /></>
                   )}
                   {trkStart && pos && !viewingRecord && (
-                    // Fix: Explicitly type coordinates as [number, number] for Polyline positions
                     <><CircleMarker center={[trkStart.lat, trkStart.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#3b82f6', fillOpacity: 1 }} />{trkPivots.map((pv, i) => <CircleMarker key={i} center={[pv.lat, pv.lng]} radius={6} pathOptions={{ color: '#fff', fillColor: '#f59e0b', fillOpacity: 1 }} />)}<Polyline positions={[[trkStart.lat, trkStart.lng] as [number, number], ...trkPivots.map(p => [p.lat, p.lng] as [number, number]), [pos.lat, pos.lng] as [number, number]]} color="#3b82f6" weight={5} /></>
                   )}
                 </>
