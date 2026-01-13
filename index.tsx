@@ -174,7 +174,7 @@ const ManualModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
       <div className="p-6 border-b border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <BookOpen size={20} className="text-blue-400" />
-          <h2 className="text-sm font-black uppercase tracking-widest text-white">Field Manual</h2>
+          <h2 className="text-sm font-black uppercase tracking-widest text-white">User Manual</h2>
         </div>
         <button onClick={onClose} className="p-2 bg-slate-800 rounded-full text-slate-400 active:scale-95 transition-all"><X size={20} /></button>
       </div>
@@ -431,7 +431,7 @@ const App: React.FC = () => {
 
             <button onClick={() => setShowManual(true)} className="bg-slate-900/50 border border-white/5 rounded-3xl p-5 flex items-center justify-center gap-3 active:scale-95 transition-all">
               <BookOpen size={18} className="text-blue-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">View Field Manual</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">View User Manual</span>
             </button>
           </div>
 
